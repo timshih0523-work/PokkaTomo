@@ -20,6 +20,7 @@ import {
 import { enqueue } from './lib/asyncQueue.js';
 import { MOOD_INSTRUCTION } from './lib/mood.js';
 import { selfPromptLine, identityRulesLine, styleGuideLine } from './lib/selfKnowledge.js';
+import { wearingLine } from './lib/wardrobe.js';
 import { relevantPreferences, relevantAnniversaries } from './lib/relevance.js';
 import { DEFAULT_PERSONA, companionNameOf } from './profileService.js';
 import { weatherPromptLine } from './weatherService.js';
@@ -125,6 +126,9 @@ export function formatNow(d) {
  *   memories：最近幾天 PokkaTomo 自己寫的日記（見 diaryService.getRecentMemories），當作「中期記憶」。
  *   now 只是給測試用，平常不用傳（預設現在時間）。
  */
+// 聊到穿著打扮（中文、日文）
+const WEAR_TOPIC_RE = /穿|衣|服|帽|圍巾|围巾|眼鏡|眼镜|墨鏡|領結|浴衣|圍裙|雨衣|打扮|造型|可愛嗎|好看|着て|着る|帽子|マフラー|メガネ|めがね|似合|おしゃれ|コーデ|ファッション/;
+
 export function buildSystemPrompt({ persona, profile, message = '', memories = [], recalls = [], weather = null, extras = [], now = new Date() } = {}) {
   const lines = [];
 
@@ -137,6 +141,11 @@ export function buildSystemPrompt({ persona, profile, message = '', memories = [
   // 身份與說話規則。真機上看到模型說「其實我是個 AI，所以沒有真正的胸口」、每句都用「哈囉～」開頭、
   // 同一件事（幸運色、紀念日）一講再講，這裡明確禁止。
   lines.push(identityRulesLine(companionNameOf(profile)));
+  // 衣櫥：只有聊到穿著打扮時才告訴模型現在穿什麼（小模型的提示詞越短越好）
+  if (profile?.avatarStyle !== 'classic' && WEAR_TOPIC_RE.test(message)) {
+    const wear = wearingLine(profile?.outfit, { date: now });
+    if (wear) lines.push(wear);
+  }
 
   if (profile?.nickname) {
     lines.push(`使用者希望你稱呼他/她為「${profile.nickname}」。`);

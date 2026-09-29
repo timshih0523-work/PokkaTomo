@@ -66,7 +66,7 @@ npm run bundle      # 打包 zip 給新電腦
   模型輸出一律假設可能格式錯誤（情緒標籤解析失敗 → calm；JSON 解析失敗 → 忽略）。
 - **前後端共用清單**要一致（有測試）：情緒 `lib/mood.js` ↔ `web/src/moods.js`；觸摸部位
   `companionService.TOUCH_PARTS` ↔ `web/src/avatarParts.js`；字數上限（前端 maxlength ↔ 後端）。
-- **角色**：`App.vue` 只透過 `AvatarAdapter` 的 props（status/mood/quirk/accessory/label）與事件（touch/hover `{part, side}`）
+- **角色**：`App.vue` 只透過 `AvatarAdapter` 的 props（status/mood/quirk/outfit/label）與事件（touch/hover `{part, side}`）
   跟角色溝通。換全身／3D 角色只換 `AvatarAdapter` 底下的元件。
 - **前端 composable** 要能在元件外使用（lifecycle hook 用 `getCurrentInstance()` 保護），才能寫測試。
 - 新功能要有測試：純函式放 `tests/lib/`、service 放 `tests/*Service.test.js`、API 放 `tests/api*.test.js`
@@ -111,10 +111,10 @@ npm run bundle      # 打包 zip 給新電腦
 - 已完成：四位數密碼鎖＋閒置 15 分鐘上鎖、多角色（每個角色獨立）、文字對話預設隱藏＋漫畫對話泡泡、占卜彈窗、占卜按鈕在天氣旁、
   日記月曆的「日記／對話」頁籤、每小時天氣、進畫面不顯示舊對話、永久對話封存（JSONL）、每日自動備份、匯出 zip、紀錄檔、輕量 RAG（BM25）、全身 SVG 角色（可切回舊版）、
   啟動檔優先開 Chrome、字數上限單一來源、農曆資料到 2099、說話語言／介面語言分開、刪除角色、匯入備份、登入時自動打開、
-  「記得的事」彈窗（搜尋＋改／刪記憶）、吃東西／跳舞／睡帽／換季服裝。
+  「記得的事」彈窗（搜尋＋改／刪記憶）、吃東西／跳舞／睡帽／衣櫥（換季服裝＝自動）、手機 HTTPS＋語音輸入。
 - 可能的下一步：提醒／鬧鐘（先不做）。同一個角色只用一種語言，不需要中日文互找。
 - 忘記密碼：刪 `server/data/app/security.json`。
-- **Git 不上傳**：`server/data/`（使用者資料）、`*.local.md`（私人背景）、`.env`、`Claude outputs/`，見 `.gitignore`。
+- **Git 不上傳**：`server/data/`（使用者資料）、`*.local.md`（私人背景）、`.env`、`Claude outputs/`、`server/native/build/`，見 `.gitignore`。不用 GitHub Actions（`.github/workflows/` 也在 `.gitignore`）：上傳前自己跑 `npm test`。
 - 手機／平板：家裡 Wi‑Fi、HTTPS（自己發的憑證，每台手機裝一次）、按住說話＝手機錄音→Mac 辨識（`speechService.js`＋`native/speech.swift`）。
   `speech.swift` 在 Linux 開發環境沒辦法編譯或執行，改它之後一定要在 Mac 上實測；改了會重新編譯、Mac 要重新允許語音辨識。
 - 授權：AGPL-3.0-or-later，原作者 timshih0523-work（`LICENSE`、README「授權」、設定面板最下面的原始碼連結；AGPL 要求網路服務也要提供原始碼，不要拿掉）。

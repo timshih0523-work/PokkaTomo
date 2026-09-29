@@ -38,7 +38,7 @@ export function freshProfile(language = 'zh') {
 const USER_FIELDS = ['nickname', 'uiLanguage', 'location', 'preferences', 'anniversaries'];
 
 // 屬於「角色」的欄位（存在 character.json）。language 只在新增角色時決定，這裡不接受修改。
-const CHARACTER_FIELDS = ['companionName', 'personaPrompt', 'avatarStyle', 'palette', 'firstMetAt', 'voice', 'voicePitch', 'voiceRate'];
+const CHARACTER_FIELDS = ['companionName', 'personaPrompt', 'avatarStyle', 'palette', 'outfit', 'firstMetAt', 'voice', 'voicePitch', 'voiceRate'];
 
 async function readUserFile(language) {
   const stored = await readJson(userPath(), () => null);
@@ -67,6 +67,7 @@ export async function getProfile() {
     personaPrompt: isDefaultPersona(ch.personaPrompt) ? defaultPersonaFor(ch.language) : ch.personaPrompt,
     avatarStyle: ch.avatarStyle,
     palette: ch.palette,
+    outfit: ch.outfit,
     firstMetAt: ch.firstMetAt,
     voice: ch.voice,
     voicePitch: ch.voicePitch,
@@ -187,6 +188,9 @@ function sanitizePartialProfile(partial) {
   // 角色外觀：full = 全身角色（預設）、classic = 原本的圓滾滾 Q 版；毛色
   if (AVATAR_STYLES.includes(partial.avatarStyle)) next.avatarStyle = partial.avatarStyle;
   if (PALETTES.includes(partial.palette)) next.palette = partial.palette;
+  // 衣櫥的穿搭（lib/wardrobe.js）
+  const charFields = sanitizeCharacterFields(partial);
+  if (charFields.outfit) next.outfit = charFields.outfit;
   // 聲音（角色的欄位，淨化規則在 characterService）
   const voice = sanitizeCharacterFields(partial);
   for (const k of ['voice', 'voicePitch', 'voiceRate']) if (k in voice) next[k] = voice[k];

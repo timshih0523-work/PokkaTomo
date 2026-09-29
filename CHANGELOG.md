@@ -337,9 +337,9 @@
   公開檔案（AGENTS.md、README*.md、CHANGELOG.md、程式註解、測試資料）改成中性的說法（「使用者」、假的範例名字與日期）；
   私人背景搬到 `AGENTS.local.md`、`CHANGELOG.local.md`（`.gitignore` 裡的 `*.local.md`，只留在開發者電腦上），AGENTS.md／CLAUDE.md 開頭提醒 AI 一起讀。
   `.gitignore` 整理：`server/data/` 整個不上傳（以前只排除暫存檔）、`*.local.md`、`.env*`（範例除外）、`Claude outputs/`、`*.log`。
-- **授權與自動測試**：`LICENSE`（AGPL-3.0-or-later，原作者 timshih0523-work：要保留原作者、改過的版本也要開源，連架成網站提供服務也要公開原始碼）、
+- **授權**：`LICENSE`（AGPL-3.0-or-later，原作者 timshih0523-work：要保留原作者、改過的版本也要開源，連架成網站提供服務也要公開原始碼）、
   package.json 的 license／author／repository、README「授權」、設定面板最下面的原始碼連結（AGPL 第 13 條）。
-  `.github/workflows/test.yml`：推上 GitHub 時自動跑 `npm ci`、`npm test`（TZ=Asia/Taipei）、`npm run build`。確認過 UTC 下測試也會過。
+  （當時也加了 GitHub Actions 自動測試，後來開發者決定不用、已移除，見下面。）確認過 UTC 下測試也會過。
 - **角色拖曳排序**：選角色畫面卡片左上角 ⠿，手指、滑鼠都能拖（自己用 pointer 事件做，HTML5 drag & drop 在 iPad 上不能用），也能用方向鍵；`PUT /api/characters/order`。
   坑：move／up 一開始掛在把手上，卡片重新排列時把手被搬動、失去 pointer capture，後面的事件收不到、放開後順序沒存 → 改掛在 window。
 - **刪除角色改成真的刪**（開發者決定）：整個角色資料夾刪除，每日備份裡那個角色的資料也刪；畫面上的說明改成「無法復原」。
@@ -363,3 +363,11 @@
   現在是整個畫面最上層的彈出視窗（`.fortune-layer`，fixed、置中、淡淡的底色，點旁邊或 Esc 關閉）。
   圖層順序：畫面 → 占卜 45 → 日記／記憶／設定面板 50（之後打開的蓋在上面，Esc 先關面板）→ 小提示 80。
 - 手機錄完音讓 AudioContext 暫停（iPhone 上它還在跑時可能維持錄音模式，角色的聲音會從聽筒出來、變很小聲）。
+- **不使用 GitHub Actions**（開發者決定）：移除 `.github/workflows/test.yml`，`.gitignore` 加上 `.github/workflows/`。
+  測試改成在自己電腦上跑 `npm test`（上傳前跑一次）。
+- **衣櫥 👗**：每個角色可以自由選穿搭（開發者：頭／脖子／衣服／臉四個部位、全部一開始就能穿、每個部位有「自動」、換好角色說一句話）。
+  - 21 件：頭 9（原本的換季帽子＋節日配件，新增毛線帽、蝴蝶結、小皇冠）、脖子 4（圍巾、領結、鈴鐺項圈、領巾）、
+    衣服 5（T 恤、毛衣、浴衣、圍裙、雨衣）、臉 3（圓眼鏡、墨鏡、愛心眼鏡）。全部是 FullBodyAvatar.vue 裡的 SVG。
+  - 存在 `character.json` 的 `outfit`；「自動」＝原本的換季／節日規則，自己選的就一直穿（節日也不換）。原本的 `accessory` 改成 `outfit`（元件仍相容舊的 accessory）。
+  - 衣櫥面板：試穿預覽＋每件都用角色本人的小圖；聊到穿著時模型才知道現在穿什麼。選角色畫面的小圖也穿著各自的衣服。
+  - iPhone SE（320px）上面多了一顆按鈕會擠出畫面 → 很窄時按鈕與間距縮小。測試 241 → 245 個。

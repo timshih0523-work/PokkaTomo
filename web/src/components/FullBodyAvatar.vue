@@ -2,7 +2,8 @@
   FullBodyAvatar.vue — 全身角色（預設）。手繪風的原創小動物：大頭、圓耳朵、短短的手腳、蓬蓬的尾巴。
   純 SVG＋CSS 動畫，沒有任何圖片或套件，整個元件幾 KB，在舊 Mac 上也很順。
 
-  跟舊版 SvgAvatar 一樣只吃 props（status／mood／quirk／accessory／label）、只發 touch／hover 事件，
+  跟舊版 SvgAvatar 一樣只吃 props（status／mood／quirk／outfit／label）、只發 touch／hover 事件，
+  outfit＝衣櫥實際穿在身上的東西 { head, neck, body, face }（web/src/outfits.js 的 resolveOutfit；舊的 accessory 也還吃）。
   表情規則共用 web/src/avatarFaces.js、點擊判斷共用 composables/useAvatarHit.js。
 
   「手繪感」的做法：每個形狀都有同一色的柔和描邊（圓角接點）、身體用由上到下的漸層、
@@ -38,6 +39,10 @@
         <stop offset="0" class="fur-top" />
         <stop offset="1" class="fur-bottom" />
       </linearGradient>
+      <!-- 衣服只畫在身體的範圍裡 -->
+      <clipPath :id="`${uid}-body`">
+        <path d="M66 150 C62 120 80 110 100 110 C120 110 138 120 134 150 C132 176 120 186 100 186 C80 186 68 176 66 150 Z" />
+      </clipPath>
       <radialGradient :id="`${uid}-cream`" cx="0.5" cy="0.4" r="0.6">
         <stop offset="0" stop-color="#fffaf1" />
         <stop offset="1" stop-color="#ffeccf" />
@@ -64,6 +69,39 @@
           d="M66 150 C62 120 80 110 100 110 C120 110 138 120 134 150 C132 176 120 186 100 186 C80 186 68 176 66 150 Z"
         />
         <ellipse cx="100" cy="158" rx="22" ry="21" class="cream" />
+        <!-- 衣櫥：衣服（身體上、心情燈下面；心情燈像胸針一樣一直看得到） -->
+        <g v-if="body" class="acc clothes" :clip-path="`url(#${uid}-body)`">
+          <template v-if="body === 'tshirt'">
+            <rect x="58" y="108" width="84" height="58" fill="#7fb8e8" />
+            <path d="M60 164 H140" stroke="#5b93c4" stroke-width="2" />
+            <path d="M88 112 Q100 122 112 112" stroke="#5b93c4" stroke-width="2" fill="none" />
+          </template>
+          <template v-else-if="body === 'sweater'">
+            <rect x="58" y="108" width="84" height="62" fill="#f2a7a0" />
+            <path d="M72 126 l6 6 l6 -6 l6 6 l6 -6 l6 6 l6 -6 l6 6 l6 -6 l6 6" stroke="#fbd3cf" stroke-width="2" fill="none" />
+            <rect x="58" y="162" width="84" height="8" fill="#e58d85" />
+            <path d="M66 162 v8 M74 162 v8 M82 162 v8 M90 162 v8 M98 162 v8 M106 162 v8 M114 162 v8 M122 162 v8 M130 162 v8" stroke="#d07d76" stroke-width="1" />
+          </template>
+          <template v-else-if="body === 'yukata'">
+            <rect x="58" y="108" width="84" height="80" fill="#445d93" />
+            <circle v-for="d in YUKATA_DOTS" :key="d.join()" :cx="d[0]" :cy="d[1]" r="2.2" fill="#e8eefc" opacity="0.8" />
+            <path d="M84 110 L100 134 L116 110" stroke="#ffffff" stroke-width="5" fill="none" stroke-linejoin="round" />
+            <rect x="58" y="148" width="84" height="11" fill="#f28c8c" />
+            <path d="M58 153.5 H142" stroke="#ffd1d1" stroke-width="1.5" />
+          </template>
+          <template v-else-if="body === 'apron'">
+            <path d="M82 124 H118 V150 C126 152 130 166 128 186 H72 C70 166 74 152 82 150 Z" fill="#fffdf7" stroke="#e0c9a6" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M82 124 L76 112 M118 124 L124 112" stroke="#e0c9a6" stroke-width="3" stroke-linecap="round" />
+            <path d="M90 164 h20 v10 a4 4 0 0 1 -4 4 h-12 a4 4 0 0 1 -4 -4 Z" fill="#ffe3e9" stroke="#e8b4c0" stroke-width="1.4" />
+          </template>
+          <template v-else-if="body === 'raincoat'">
+            <rect x="58" y="108" width="84" height="74" fill="#ffd54f" />
+            <path d="M100 118 V182" stroke="#e0b030" stroke-width="1.8" />
+            <circle cx="106" cy="160" r="2.4" fill="#e0b030" /><circle cx="106" cy="172" r="2.4" fill="#e0b030" />
+            <path d="M58 180 H142" stroke="#e0b030" stroke-width="2" />
+          </template>
+        </g>
+        <path v-if="body" class="clothes-outline" d="M66 150 C62 120 80 110 100 110 C120 110 138 120 134 150 C132 176 120 186 100 186 C80 186 68 176 66 150 Z" />
         <!-- 心情燈：情緒的顏色 -->
         <!-- 心情燈：胸口的小愛心，顏色＝現在的心情 -->
         <path
@@ -79,13 +117,16 @@
         <!-- 手（在身體前面）。外層 g 做動畫，裡面的 transform 只負責擺好角度 -->
         <g class="arm arm-left">
           <ellipse cx="68" cy="142" rx="8.5" ry="15" transform="rotate(28 68 142)" class="fur" />
+          <!-- 袖子：短袖蓋手臂上半、長袖（毛衣、雨衣、浴衣）蓋到手腕，手掌露出來 -->
+          <ellipse v-if="sleeve" :cx="sleeve.long ? 70 : 72.5" :cy="sleeve.long ? 139 : 134" rx="9.6" :ry="sleeve.long ? 12.5 : 8" :transform="`rotate(28 ${sleeve.long ? 70 : 72.5} ${sleeve.long ? 139 : 134})`" :fill="sleeve.fill" :stroke="sleeve.line" stroke-width="1.5" />
         </g>
         <g class="arm arm-right">
           <ellipse cx="132" cy="142" rx="8.5" ry="15" transform="rotate(-28 132 142)" class="fur" />
+          <ellipse v-if="sleeve" :cx="sleeve.long ? 130 : 127.5" :cy="sleeve.long ? 139 : 134" rx="9.6" :ry="sleeve.long ? 12.5 : 8" :transform="`rotate(-28 ${sleeve.long ? 130 : 127.5} ${sleeve.long ? 139 : 134})`" :fill="sleeve.fill" :stroke="sleeve.line" stroke-width="1.5" />
         </g>
 
         <!-- 吃東西：雙手捧著飯糰（畫在手的前面、頭的後面，手從兩側捧著），頭一下一下低下去咬 -->
-        <g v-if="quirk === 'eat' && accessory !== 'scarf'" class="snack">
+        <g v-if="quirk === 'eat' && !neck" class="snack">
           <path d="M100 119 C108 119 123 139 123 146 C123 154 77 154 77 146 C77 139 92 119 100 119 Z" fill="#ffffff" stroke="#cdbfa9" stroke-width="1.8" stroke-linejoin="round" />
           <rect x="88" y="138" width="24" height="15" rx="2.5" fill="#2f3d2f" />
           <circle cx="96" cy="129" r="1.2" fill="#e57373" /><circle cx="104" cy="131" r="1" fill="#e57373" />
@@ -108,18 +149,18 @@
           <!-- 頭頂一撮毛 -->
           <path class="tuft" d="M93 38 Q95 27 102 34 Q104 25 111 35" />
 
-          <!-- 節日配件 -->
-          <g v-if="accessory === 'santa'" class="acc">
+          <!-- 頭上的配件（衣櫥的「頭」；自動＝節日配件或換季帽子） -->
+          <g v-if="head === 'santa' && status !== 'ASLEEP'" class="acc">
             <path d="M58 56 C62 22 104 4 140 14 L128 54 Z" fill="#e53935" stroke="#b71c1c" stroke-width="1.5" />
             <circle cx="142" cy="14" r="8" fill="#ffffff" />
             <rect x="54" y="48" width="92" height="12" rx="6" fill="#ffffff" />
           </g>
-          <g v-else-if="accessory === 'witch'" class="acc">
+          <g v-else-if="head === 'witch' && status !== 'ASLEEP'" class="acc">
             <ellipse cx="100" cy="46" rx="54" ry="9" fill="#4a2f73" />
             <path d="M76 44 L108 -4 L124 44 Z" fill="#6a45a3" />
             <rect x="78" y="34" width="44" height="8" fill="#ffb74d" />
           </g>
-          <g v-else-if="accessory === 'sakura'" class="acc">
+          <g v-else-if="head === 'sakura'" class="acc">
             <circle
               v-for="a in [0, 72, 144, 216, 288]"
               :key="a"
@@ -137,24 +178,40 @@
             <circle cx="166" cy="64" r="7" fill="#ffffff" stroke="#c9d2f0" stroke-width="1.2" />
             <rect x="52" y="50" width="96" height="11" rx="5.5" fill="#ffffff" stroke="#c9d2f0" stroke-width="1.2" />
           </g>
-          <!-- 換季服裝（web/src/outfits.js）：春 小花冠、夏 草帽、秋 貝雷帽。冬天的圍巾畫在頭下面（見下方） -->
-          <g v-else-if="accessory === 'flowers'" class="acc">
+          <!-- 帽子類（睡覺時戴睡帽，其他帽子先拿下來） -->
+          <g v-else-if="head === 'flowers'" class="acc">
             <g v-for="(f, i) in SPRING_FLOWERS" :key="i" :transform="`translate(${f[0]} ${f[1]})`">
               <circle v-for="a in [0, 72, 144, 216, 288]" :key="a" :cx="4.2 * Math.cos((a * Math.PI) / 180)" :cy="4.2 * Math.sin((a * Math.PI) / 180)" r="3.4" :fill="f[2]" />
               <circle r="2.2" fill="#ffd54f" />
             </g>
           </g>
-          <g v-else-if="accessory === 'strawhat'" class="acc">
+          <g v-else-if="head === 'strawhat'" class="acc">
             <ellipse cx="100" cy="46" rx="64" ry="11" fill="#f3d58a" stroke="#c9a24f" stroke-width="1.6" />
             <path d="M68 46 C66 18 134 18 132 46 Z" fill="#f3d58a" stroke="#c9a24f" stroke-width="1.6" stroke-linejoin="round" />
             <path d="M68 40 C88 44 112 44 132 40 L132 46 C112 50 88 50 68 46 Z" fill="#e57373" />
             <path d="M80 30 q20 -4 40 0" stroke="#d8b665" stroke-width="1.2" fill="none" />
           </g>
-          <g v-else-if="accessory === 'beret'" class="acc">
+          <g v-else-if="head === 'beret'" class="acc">
             <ellipse cx="94" cy="40" rx="46" ry="15" transform="rotate(-10 94 40)" fill="#b0463f" stroke="#86302b" stroke-width="1.6" />
             <rect x="96" y="20" width="4" height="7" rx="2" transform="rotate(-10 98 24)" fill="#86302b" />
             <!-- 一片小楓葉 -->
             <path d="M134 44 l3 -6 l2 4 l4 -3 l-1 5 l5 1 l-5 3 l2 4 l-5 -2 l-1 5 l-2 -5 l-5 2 l2 -4 l-5 -2 l5 -2 Z" fill="#f08a3c" />
+          </g>
+          <g v-else-if="head === 'beanie'" class="acc">
+            <path d="M56 58 C54 20 146 20 144 58 Z" fill="#7db38a" stroke="#5c8f69" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M78 30 v24 M92 26 v28 M108 26 v28 M122 30 v24" stroke="#94c4a0" stroke-width="2" />
+            <rect x="53" y="48" width="94" height="13" rx="6.5" fill="#6aa078" stroke="#5c8f69" stroke-width="1.4" />
+            <circle cx="100" cy="20" r="9" fill="#fbfbf6" stroke="#dcdccf" stroke-width="1.2" />
+          </g>
+          <g v-else-if="head === 'ribbon'" class="acc">
+            <ellipse cx="119" cy="40" rx="11" ry="7" transform="rotate(-25 119 40)" fill="#ff6f91" stroke="#e0467c" stroke-width="1.4" />
+            <ellipse cx="139" cy="34" rx="11" ry="7" transform="rotate(-25 139 34)" fill="#ff6f91" stroke="#e0467c" stroke-width="1.4" />
+            <circle cx="129" cy="37" r="4.5" fill="#e0467c" />
+          </g>
+          <g v-else-if="head === 'crown'" class="acc">
+            <path d="M76 42 L78 18 L90 30 L100 12 L110 30 L122 18 L124 42 Z" fill="#ffd54f" stroke="#d4a017" stroke-width="1.8" stroke-linejoin="round" />
+            <circle cx="100" cy="34" r="3.4" fill="#e57373" /><circle cx="86" cy="36" r="2.4" fill="#64b5f6" /><circle cx="114" cy="36" r="2.4" fill="#64b5f6" />
+            <circle cx="78" cy="17" r="2.4" fill="#fff3a8" /><circle cx="100" cy="11" r="2.6" fill="#fff3a8" /><circle cx="122" cy="17" r="2.4" fill="#fff3a8" />
           </g>
 
           <!-- 臉頰 -->
@@ -189,6 +246,22 @@
             <path d="M112 73 Q121 68 128 72" />
           </g>
 
+          <!-- 衣櫥：眼鏡 -->
+          <g v-if="face === 'roundglasses'" class="acc glasses">
+            <circle cx="80" cy="85" r="11.5" fill="rgba(255,255,255,0.18)" stroke="#6d4c41" stroke-width="2.3" />
+            <circle cx="120" cy="85" r="11.5" fill="rgba(255,255,255,0.18)" stroke="#6d4c41" stroke-width="2.3" />
+            <path d="M91.5 84 Q100 79 108.5 84 M68.5 83 L56 79 M131.5 83 L144 79" stroke="#6d4c41" stroke-width="2.3" fill="none" stroke-linecap="round" />
+          </g>
+          <g v-else-if="face === 'sunglasses'" class="acc glasses">
+            <path d="M66 78 H94 V88 Q94 97 84 97 H76 Q66 97 66 88 Z M106 78 H134 V88 Q134 97 124 97 H116 Q106 97 106 88 Z" fill="#2f2f38" stroke="#1d1d24" stroke-width="1.6" opacity="0.92" />
+            <path d="M94 81 H106 M66 80 L56 77 M134 80 L144 77" stroke="#1d1d24" stroke-width="2.3" stroke-linecap="round" />
+            <path d="M71 82 l6 0 M111 82 l6 0" stroke="#ffffff" stroke-width="2" opacity="0.55" stroke-linecap="round" />
+          </g>
+          <g v-else-if="face === 'heartglasses'" class="acc glasses">
+            <path v-for="x in [80, 120]" :key="x" :transform="`translate(${x} 84)`" d="M0 10 C-14 1 -14 -9 -7 -10 C-3 -11 -0.5 -8 0 -5 C0.5 -8 3 -11 7 -10 C14 -9 14 1 0 10 Z" fill="rgba(255,122,168,0.72)" stroke="#e0467c" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M92 81 Q100 77 108 81 M67 80 L56 77 M133 80 L144 77" stroke="#e0467c" stroke-width="2" fill="none" stroke-linecap="round" />
+          </g>
+
           <!-- 鼻子＋嘴巴（嘴型共用 avatarFaces.js，原本以 (100,142) 為中心，縮小搬到這裡） -->
           <ellipse cx="100" cy="95" rx="3.4" ry="2.4" class="nose" />
           <g transform="translate(100 103) scale(0.6) translate(-100 -142)">
@@ -196,16 +269,31 @@
           </g>
         </g>
 
-        <!-- 冬天：圍巾（在頭的下面、身體前面） -->
-        <g v-if="accessory === 'scarf'" class="acc scarf">
+        <!-- 脖子（在頭的下面、身體前面）：圍巾（冬天自動）、領結、鈴鐺項圈、領巾 -->
+        <g v-if="neck === 'scarf'" class="acc scarf">
           <path d="M60 118 C78 130 122 130 140 118 L142 129 C122 141 78 141 58 129 Z" fill="#e05a5a" stroke="#b83f3f" stroke-width="1.5" stroke-linejoin="round" />
           <path d="M116 130 L132 128 L136 160 L120 162 Z" fill="#e05a5a" stroke="#b83f3f" stroke-width="1.5" stroke-linejoin="round" />
           <path d="M121 158 v6 M126 158 v6 M131 157 v6" stroke="#b83f3f" stroke-width="1.6" stroke-linecap="round" />
           <path d="M72 128 q28 8 56 0" stroke="#ffffff" stroke-width="2.5" fill="none" opacity="0.7" stroke-dasharray="5 5" />
         </g>
 
-        <!-- 冬天戴圍巾時飯糰要畫在圍巾前面，不然會被圍巾擋住 -->
-        <g v-if="quirk === 'eat' && accessory === 'scarf'" class="snack">
+        <g v-else-if="neck === 'bowtie'" class="acc">
+          <path d="M100 124 L86 116 Q83 124 86 132 Z M100 124 L114 116 Q117 124 114 132 Z" fill="#e05a7a" stroke="#b8405c" stroke-width="1.5" stroke-linejoin="round" />
+          <circle cx="100" cy="124" r="3.6" fill="#b8405c" />
+        </g>
+        <g v-else-if="neck === 'bell'" class="acc">
+          <path d="M62 118 C80 129 120 129 138 118 L139 124 C120 135 80 135 61 124 Z" fill="#e05a5a" stroke="#b83f3f" stroke-width="1.3" stroke-linejoin="round" />
+          <!-- 鈴鐺在心情燈上面一點，不要擋到它 -->
+          <circle cx="100" cy="130" r="5.2" fill="#ffd54f" stroke="#d4a017" stroke-width="1.4" />
+          <path d="M100 131 v3.4 M95.5 129 h9" stroke="#a87a10" stroke-width="1.2" stroke-linecap="round" />
+        </g>
+        <g v-else-if="neck === 'bandana'" class="acc">
+          <path d="M64 118 C80 128 120 128 136 118 L130 125 L100 136 L70 125 Z" fill="#5a9be0" stroke="#3f7cc0" stroke-width="1.4" stroke-linejoin="round" />
+          <circle cx="86" cy="126" r="1.5" fill="#fff" /><circle cx="100" cy="130" r="1.5" fill="#fff" /><circle cx="114" cy="126" r="1.5" fill="#fff" />
+        </g>
+
+        <!-- 脖子有東西時飯糰要畫在它前面，不然會被擋住 -->
+        <g v-if="quirk === 'eat' && neck" class="snack">
           <path d="M100 119 C108 119 123 139 123 146 C123 154 77 154 77 146 C77 139 92 119 100 119 Z" fill="#ffffff" stroke="#cdbfa9" stroke-width="1.8" stroke-linejoin="round" />
           <rect x="88" y="138" width="24" height="15" rx="2.5" fill="#2f3d2f" />
           <circle cx="96" cy="129" r="1.2" fill="#e57373" /><circle cx="104" cy="131" r="1" fill="#e57373" />
@@ -219,7 +307,7 @@
           <path data-part="body" d="M66 150 C62 120 80 110 100 110 C120 110 138 120 134 150 C132 176 120 186 100 186 C80 186 68 176 66 150 Z" />
           <ellipse data-part="tail" cx="151" cy="143" rx="18" ry="30" transform="rotate(34 151 143)" />
           <ellipse data-part="head" cx="100" cy="60" rx="50" ry="26" />
-          <path v-if="accessory === 'santa' || accessory === 'witch' || accessory === 'strawhat' || status === 'ASLEEP'" data-part="head" d="M56 58 L106 -6 L146 14 L140 58 Z" />
+          <path v-if="TALL_HATS.includes(head) || status === 'ASLEEP'" data-part="head" d="M56 58 L106 -6 L146 14 L140 58 Z" />
           <ellipse data-part="face" cx="100" cy="92" rx="38" ry="28" />
           <circle data-part="cheek" data-side="left" cx="68" cy="98" r="12" />
           <circle data-part="cheek" data-side="right" cx="132" cy="98" r="12" />
@@ -292,9 +380,39 @@ const props = defineProps({
   mood: { type: String, default: 'calm' },
   label: { type: String, default: 'PokkaTomo' },
   quirk: { type: String, default: null },
+  // 衣櫥：實際穿在身上的東西 { head, neck, body, face }（web/src/outfits.js 的 resolveOutfit）
+  outfit: { type: Object, default: null },
+  // 舊的寫法（只有一個配件）：沒給 outfit 時用；圍巾算脖子，其他算頭
   accessory: { type: String, default: null },
   palette: { type: String, default: 'peach' }
 });
+
+const worn = computed(() => {
+  if (props.outfit) return props.outfit;
+  const a = props.accessory;
+  return { head: a && a !== 'scarf' ? a : null, neck: a === 'scarf' ? 'scarf' : null, body: null, face: null };
+});
+const head = computed(() => worn.value.head || null);
+const neck = computed(() => worn.value.neck || null);
+const body = computed(() => worn.value.body || null);
+const face = computed(() => worn.value.face || null);
+
+// 比較高的帽子：頭的感應區往上加大，點帽子也算摸頭
+const TALL_HATS = ['santa', 'witch', 'strawhat', 'beanie', 'crown'];
+
+// 衣服的袖子顏色（long：長袖）
+const SLEEVES = {
+  tshirt: { fill: '#7fb8e8', line: '#5b93c4', long: false },
+  sweater: { fill: '#f2a7a0', line: '#d07d76', long: true },
+  yukata: { fill: '#445d93', line: '#33466f', long: true },
+  raincoat: { fill: '#ffd54f', line: '#e0b030', long: true }
+};
+const sleeve = computed(() => SLEEVES[body.value] || null);
+
+// 浴衣的點點花紋
+const YUKATA_DOTS = [
+  [74, 128], [128, 124], [70, 168], [86, 176], [118, 172], [132, 164], [80, 142], [124, 142]
+];
 
 const rootStyle = computed(() => ({
   '--mood-color': moodColorValue.value,
@@ -353,6 +471,8 @@ const mouthPath = computed(() => mouthFor(props.status, props.mood, props.quirk)
 .muzzle { opacity: 0.95; }
 .tail-tip { fill: #fff3e0; }
 .outline { fill: none; stroke: var(--line); stroke-width: 2.2; }
+/* 穿衣服時身體的外框再描一次（衣服蓋掉了身體邊緣的描邊） */
+.clothes-outline { fill: none; stroke: var(--line); stroke-width: 2.2; stroke-linejoin: round; }
 .fur-line { fill: none; stroke: var(--line); stroke-width: 1.4; stroke-linecap: round; opacity: 0.45; }
 .ear-inner { fill: #ffb9a0; opacity: 0.85; }
 .tuft { fill: none; stroke: var(--line); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

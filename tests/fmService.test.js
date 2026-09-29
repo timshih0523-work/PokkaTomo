@@ -137,3 +137,13 @@ test('喜好／紀念日平常不放進 prompt，聊到才放', () => {
   const ask = fm.buildSystemPrompt({ profile, message: '我的紀念日是哪天', now });
   assert.match(ask, /交往紀念日（每年5月20日）/);
 });
+
+test('衣櫥：聊到穿著時才告訴模型現在穿什麼；自動的部位跟著季節', () => {
+  const profile = { outfit: { head: 'auto', neck: 'bowtie', body: 'sweater', face: 'none' } };
+  const summer = new Date(2026, 6, 1, 12);
+  const asked = fm.buildSystemPrompt({ profile, message: '你今天穿什麼？', now: summer });
+  assert.match(asked, /你今天的穿搭：草帽、領結、毛衣/);
+  assert.ok(!/穿搭/.test(fm.buildSystemPrompt({ profile, message: '今天好熱', now: summer })), '沒聊到就不放');
+  assert.match(fm.buildSystemPrompt({ profile, message: 'その服、似合うね', now: new Date(2026, 0, 10) }), /你今天的穿搭：領結、毛衣/);
+  assert.ok(!/穿搭/.test(fm.buildSystemPrompt({ profile: { ...profile, avatarStyle: 'classic' }, message: '你穿什麼', now: summer })), '圓圓的樣子沒有衣服');
+});

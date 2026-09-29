@@ -25,6 +25,7 @@ function summaries(list) {
         name: c.name,
         avatarStyle: c.avatarStyle,
         palette: c.palette,
+        outfit: c.outfit,
         firstMetAt: c.firstMetAt,
         level: levelInfo((await getState()).points).level
       }))

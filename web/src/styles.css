@@ -906,6 +906,22 @@ html:lang(ja) body {
     padding: 4px 7px;
   }
 }
+/* 很窄的手機（iPhone SE 320px）：功能按鈕多了衣櫥之後會擠出畫面，按鈕跟間距縮小一點 */
+@media (max-width: 359px) {
+  .app-root {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .top-group,
+  .top-bar-right {
+    gap: 4px;
+  }
+  .settings-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}
 
 @media (max-height: 640px) {
   .app-root {

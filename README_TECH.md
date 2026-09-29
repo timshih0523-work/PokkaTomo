@@ -38,7 +38,7 @@
 ```
 ┌──────────────────────── 瀏覽器（Vue 3 SPA）────────────────────────┐
 │ App.vue：狀態、對話流程、各種計時器                                  │
-│   AvatarAdapter ─ SvgAvatar（角色；status／mood／quirk／accessory；    │
+│   AvatarAdapter ─ SvgAvatar（角色；status／mood／quirk／outfit；        │
 │                  感應區回報 touch{part,side}）                        │
 │   HoldToSpeakButton（Web Speech STT）  useVoice（TTS）                │
 │   SettingsPanel / DiaryPanel（BaseDialog）  SeasonDecor / Particle     │
@@ -78,7 +78,6 @@ pokkatomo_apple/
 ├─ autostart-on.command        # 登入 Mac 時自動打開 PokkaTomo（加進 macOS 登入項目）
 ├─ autostart-off.command       # 取消上面那個
 ├─ LICENSE                     # AGPL-3.0（原作者 timshih0523-work）
-├─ .github/workflows/test.yml  # 推上 GitHub 時自動跑 npm test＋build
 ├─ package.json                # scripts：dev / build / start / bundle / test / test:coverage
 ├─ vite.config.js              # 前端建置（輸出 server/public；dev proxy 指向 127.0.0.1:PORT）
 ├─ scripts/
@@ -213,7 +212,7 @@ pokkatomo_apple/
 | `POST /api/lock/unlock` | `{ pin }` | `{ token }`；錯 401 `wrong_pin`；太多次 429 |
 | `POST /api/lock/change` | `{ current, next }`＋token | `{ ok: true }` |
 | `POST /api/lock/lock` | token | `{ ok: true }`（這個 token 作廢） |
-| `GET /api/characters` | — | `{ characters: [{ id, name, avatarStyle, palette, firstMetAt, level }] }` |
+| `GET /api/characters` | — | `{ characters: [{ id, name, avatarStyle, palette, outfit, firstMetAt, level }] }` |
 | `POST /api/characters` | `{ name?, avatarStyle?, palette?, language? }` | `{ character }`；最多 12 個；其他設定一律預設值（4.12） |
 | `PUT /api/characters/order` | `{ ids }` | `{ characters }`：照這個順序存（不認得的忽略、漏掉的接在後面）；第一個＝沒指定角色時用的 |
 | `GET /api/lan` | — | `{ enabled, running, port, setupPort, urls, setupUrls, caFingerprint, error, speech, canManage }`（手機連線的狀態；`speech` = 語音辨識狀態，見 4.15；`canManage` = 是不是在這台電腦上） |
@@ -383,6 +382,7 @@ server/data/
   "personaPrompt": "…",        // 個性（後端 ≤300；介面 150）；空 = 那個語言的預設個性
   "avatarStyle": "full",       // 'full' | 'classic'
   "palette": "mint",           // peach | cocoa | cream | mint | sakura | gray
+  "outfit": { "head": "crown", "neck": "auto", "body": "yukata", "face": "none" },  // 衣櫥：每個部位 'auto' | 'none' | 衣服 id（lib/wardrobe.js）
   "voice": "Kyoko",            // 瀏覽器聲音的 voiceURI；空 = 自動挑最好的
   "voicePitch": 1.05,          // 0.6～1.6
   "voiceRate": 1.1,            // 0.7～1.4
@@ -602,7 +602,7 @@ server/data/
 | `status` | `IDLE` `LISTENING` `THINKING` `SPEAKING` `HAPPY` `SLEEPY`（晚上 23–7 點閒置時）`ASLEEP`（說晚安後） |
 | `mood` | `joy` `love` `calm` `sad` `worried` `surprised` |
 | `quirk` | 一次性小動作：`sneeze` `yawn` `hiccup` `hum` `lookaround` `dizzy` `toot` `blush` `earwiggle` `giggle` `wave` `hop` `tailwag`（約 1.6 秒）、`eat` `dance`（約 3.6 秒）；`wave` 之後的都只有全身角色有動畫 |
-| `accessory` | 節日配件 `santa` `witch` `sakura`；沒有節日時換季服裝 `flowers`（3–5 月小花冠）`strawhat`（6–8 月草帽）`beret`（9–11 月貝雷帽＋楓葉）`scarf`（12–2 月圍巾），見 `outfits.js`；只有全身角色有 |
+| `outfit` | 衣櫥：實際穿在身上的東西 `{ head, neck, body, face }`（`outfits.js` 的 `resolveOutfit`）。頭：`flowers` `strawhat` `beret` `beanie` `ribbon` `crown` `sakura` `santa` `witch`；脖子：`scarf` `bowtie` `bell` `bandana`；衣服：`tshirt` `sweater` `yukata` `apron` `raincoat`；臉：`roundglasses` `sunglasses` `heartglasses`。只有全身角色畫得出來（舊版只畫頭上的節日配件） |
 | `label` | 螢幕報讀器唸的名字 |
 
 **事件**：`touch { part, side }`、`hover { part, side }`。部位詞彙在 `web/src/avatarParts.js`：
@@ -736,7 +736,7 @@ npm run bundle      # 打包 zip
 
 ## 8. 自動測試
 
-`npm test`（Node 內建 `node --test`，Node 20 以上，**零額外套件**），約 190 個測試；
+`npm test`（Node 內建 `node --test`，Node 20 以上，**零額外套件**），約 240 個測試（沒有 GitHub Actions，上傳 Git 前在自己電腦跑一次）；
 `npm run test:coverage` 看覆蓋率。測試資料夾叫 `tests/`（不是 `test/`：node 會把 `test/` 底下每個 JS 都當測試跑）。
 
 - `tests/helpers/env.js`：每個測試檔建暫存資料夾（`POKKATOMO_DATA_DIR`），**不會碰到真正的資料**；
@@ -766,7 +766,12 @@ npm run bundle      # 打包 zip
 - **全身角色**只有正面，沒有轉身、沒有骨架動畫；背（`back`）點不到。
 - **密碼是防君子**：資料檔沒加密；token 在伺服器記憶體，重開就要重新輸入。忘記密碼要開發者刪 `security.json`。
 - 刪除角色是真的刪（連每日備份裡的也刪），無法復原。
-- 換季服裝、吃東西、跳舞只有全身角色有；舊版圓圓的角色沒有。
+- 衣櫥（換季服裝）、吃東西、跳舞只有全身角色有；舊版圓圓的角色沒有。
+- **衣櫥**：`character.json` 的 `outfit`，每個部位 `auto`／`none`／衣服 id（`server/lib/wardrobe.js` 與 `web/src/outfits.js` 兩份清單，測試檢查一樣）。
+  「自動」：頭＝節日配件（只有前端知道節日）或換季帽子（冬天沒有）、脖子＝冬天圍巾、衣服和臉＝沒有。畫法在 `FullBodyAvatar.vue`
+  （衣服用 clipPath 畫在身體範圍內、心情燈永遠在衣服上面；長袖／短袖畫在手的群組裡跟著動）。
+  衣櫥面板 `WardrobePanel.vue`：試穿（小圖是角色本人穿上那件）→「就穿這樣！」存 `POST /api/profile { outfit }` → 角色說 `wardrobeReactions` 其中一句（只在畫面上）。
+  模型只有在聊到穿著打扮時（`fmService` 的 `WEAR_TOPIC_RE`）才會收到「你今天的穿搭：…」。
 - **鬧鐘／提醒**：網頁要開著才有用，還沒做。
 - **Safari**：語音辨識不穩；版面只在 Chromium 測過。
 - **農曆節日**資料到 2099 年（`lib/lunarData.js`）。試過改用 JS 內建的 Intl 農曆，但 ICU 在 2027、2030 年春節差一天，所以用產生的資料。

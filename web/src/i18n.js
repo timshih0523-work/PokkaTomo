@@ -219,6 +219,29 @@ export const STRINGS = {
     greetingReturn: ['你來啦～今天想聊什麼？', '嗨嗨，等你好久了～', '歡迎回來！今天過得怎麼樣？'],
     diaryButtonLabel: '{name} 的日記',
     memoryButtonLabel: '{name} 記得的事',
+    // 衣櫥（WardrobePanel.vue）
+    wardrobe: {
+      title: '{name} 的衣櫥',
+      close: '關閉',
+      slots: { head: '頭', neck: '脖子', body: '衣服', face: '臉' },
+      auto: '自動',
+      none: '不戴',
+      autoHint: '「自動」會跟著季節和節日換（春天花冠、夏天草帽、秋天貝雷帽、冬天圍巾；聖誕節、萬聖節、賞櫻時戴節日配件）。',
+      classicNote: '現在是「圓圓的」樣子，穿不了衣服。到 ⚙️設定把樣子換成「全身」就看得到囉。',
+      resetAll: '全部改回自動',
+      save: '就穿這樣！',
+      saving: '換衣服中…',
+      saveFailed: '沒換成功，等一下再試試',
+      items: {
+        flowers: '小花冠', strawhat: '草帽', beret: '貝雷帽', beanie: '毛線帽', ribbon: '蝴蝶結', crown: '小皇冠',
+        sakura: '櫻花髮夾', santa: '聖誕帽', witch: '魔女帽',
+        scarf: '圍巾', bowtie: '領結', bell: '鈴鐺項圈', bandana: '領巾',
+        tshirt: 'T 恤', sweater: '毛衣', yukata: '浴衣', apron: '圍裙', raincoat: '雨衣',
+        roundglasses: '圓眼鏡', sunglasses: '墨鏡', heartglasses: '愛心眼鏡'
+      }
+    },
+    // 換好衣服時角色說的話（角色說話的語言）
+    wardrobeReactions: ['好看嗎？嘿嘿～', '換新衣服了！轉一圈給你看～', '這樣穿很適合我吧？', '謝謝你幫我挑衣服，我好喜歡！', '哇，感覺今天會是很棒的一天！'],
     // 「記得的事」彈窗（MemoryPanel.vue）
     memory: {
       title: '{name} 記得的事',
@@ -552,6 +575,27 @@ export const STRINGS = {
     greetingReturn: ['来てくれたんだ～今日は何話す？', 'やっほー、待ってたよ～', 'おかえり！今日はどうだった？'],
     diaryButtonLabel: '{name}の日記',
     memoryButtonLabel: '{name}が覚えていること',
+    wardrobe: {
+      title: '{name}のクローゼット',
+      close: '閉じる',
+      slots: { head: 'あたま', neck: 'くび', body: 'ふく', face: 'かお' },
+      auto: 'おまかせ',
+      none: 'なし',
+      autoHint: '「おまかせ」は季節や行事で変わるよ（春は花かんむり、夏は麦わら帽子、秋はベレー帽、冬はマフラー。クリスマス・ハロウィン・お花見の日は行事の飾り）。',
+      classicNote: 'いまは「まんまる」の見た目だから服が着られないよ。⚙️設定で見た目を「全身」にすると見えるよ。',
+      resetAll: 'ぜんぶおまかせに戻す',
+      save: 'これにする！',
+      saving: 'お着替え中…',
+      saveFailed: '着替えられなかったよ、少しあとで試してね',
+      items: {
+        flowers: '花かんむり', strawhat: '麦わら帽子', beret: 'ベレー帽', beanie: 'ニット帽', ribbon: 'リボン', crown: 'ちいさな王冠',
+        sakura: '桜のヘアピン', santa: 'サンタ帽', witch: '魔女の帽子',
+        scarf: 'マフラー', bowtie: '蝶ネクタイ', bell: '鈴の首輪', bandana: 'バンダナ',
+        tshirt: 'Tシャツ', sweater: 'セーター', yukata: '浴衣', apron: 'エプロン', raincoat: 'レインコート',
+        roundglasses: 'まるメガネ', sunglasses: 'サングラス', heartglasses: 'ハートのメガネ'
+      }
+    },
+    wardrobeReactions: ['似合う？えへへ～', 'お着替えしたよ！くるっと回って見せるね～', 'これ、よく似合ってるでしょ？', '服を選んでくれてありがとう、すっごく気に入った！', 'わあ、今日はいい日になりそう！'],
     memory: {
       title: '{name}が覚えていること',
       close: '閉じる',

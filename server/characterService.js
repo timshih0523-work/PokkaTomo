@@ -1,6 +1,7 @@
 // characterService.js
 // 角色：每個角色一個資料夾 server/data/characters/<編號>/，角色本身的設定在裡面的 character.json：
-//   { id, name, language, personaPrompt, avatarStyle, palette, voice, voicePitch, voiceRate, firstMetAt, createdAt }
+//   { id, name, language, personaPrompt, avatarStyle, palette, outfit, voice, voicePitch, voiceRate, firstMetAt, createdAt }
+//   outfit＝衣櫥的穿搭 { head, neck, body, face }（lib/wardrobe.js）
 // 另外 server/data/app/characters.json 是「角色清單」：順序＋編號＋名字，給人一眼看出有哪些角色
 // （程式的名字以 character.json 為準，改名時兩邊一起寫）。
 // 使用者資料（稱呼、喜好、紀念日、城市、介面語言）在同一個資料夾的 user.json（profileService.js）。
@@ -19,6 +20,7 @@ import {
 } from './lib/characterContext.js';
 import { toLocalIso, parseTime } from './lib/time.js';
 import { log } from './lib/logger.js';
+import { sanitizeOutfit } from './lib/wardrobe.js';
 
 // 預設個性描述裡「不要」寫死名字：名字由 buildSystemPrompt() 依角色名字另外加一行。
 export const DEFAULT_COMPANION_NAME = 'PokkaTomo';
@@ -53,6 +55,7 @@ function normalize(c, id) {
     personaPrompt: persona,
     avatarStyle: AVATAR_STYLES.includes(c?.avatarStyle) ? c.avatarStyle : 'full',
     palette: PALETTES.includes(c?.palette) ? c.palette : 'peach',
+    outfit: sanitizeOutfit(c?.outfit),
     voice: typeof c?.voice === 'string' ? c.voice : '',
     voicePitch: Number.isFinite(c?.voicePitch) ? c.voicePitch : 1.05,
     voiceRate: Number.isFinite(c?.voiceRate) ? c.voiceRate : 1.0,
@@ -70,6 +73,7 @@ function toFile(c) {
     personaPrompt: c.personaPrompt,
     avatarStyle: c.avatarStyle,
     palette: c.palette,
+    outfit: c.outfit,
     voice: c.voice,
     voicePitch: c.voicePitch,
     voiceRate: c.voiceRate,
@@ -88,6 +92,8 @@ export function sanitizeCharacterFields(partial) {
   if (typeof partial.personaPrompt === 'string') next.personaPrompt = partial.personaPrompt.trim().slice(0, LIMITS.persona);
   if (AVATAR_STYLES.includes(partial.avatarStyle)) next.avatarStyle = partial.avatarStyle;
   if (PALETTES.includes(partial.palette)) next.palette = partial.palette;
+  // 衣櫥：整組送（四個部位），不認得的值當成「自動」
+  if (partial.outfit && typeof partial.outfit === 'object' && !Array.isArray(partial.outfit)) next.outfit = sanitizeOutfit(partial.outfit);
   if (typeof partial.firstMetAt === 'string' && DATE_RE.test(partial.firstMetAt)) next.firstMetAt = partial.firstMetAt;
   // 聲音：瀏覽器的 voiceURI（空字串 = 自動挑最好的）、音高、語速。說話的語言固定，所以只要一個聲音。
   if (typeof partial.voice === 'string') next.voice = partial.voice.trim().slice(0, 200);

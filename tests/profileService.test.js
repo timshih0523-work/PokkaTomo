@@ -94,3 +94,13 @@ test('同時儲存設定＋背景記憶提取合併喜好：兩邊的修改都�
   assert.equal(p.companionName, '小橘');
   assert.deepEqual(p.preferences, ['草莓', '貓']);
 });
+
+test('衣櫥：outfit 存在 character.json；不認得的值當成自動；新角色全部自動', async () => {
+  assert.deepEqual((await ps.getProfile()).outfit, { head: 'auto', neck: 'auto', body: 'auto', face: 'auto' });
+  const saved = await ps.saveProfile({ outfit: { head: 'crown', neck: 'none', body: 'yukata', face: 'hacker' } });
+  assert.deepEqual(saved.outfit, { head: 'crown', neck: 'none', body: 'yukata', face: 'auto' });
+  assert.deepEqual(env.readChar('character.json').outfit, saved.outfit);
+  assert.equal(env.readChar('user.json')?.outfit, undefined, '不是使用者的欄位');
+  // 陣列、字串之類的亂傳 → 不改
+  assert.deepEqual((await ps.saveProfile({ outfit: 'crown' })).outfit, saved.outfit);
+});

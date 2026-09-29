@@ -8,7 +8,8 @@
   quirk（小動作，選用、一次性）：'sneeze' | 'yawn' | 'hiccup' | 'hum' | 'lookaround' | 'dizzy' | 'toot' | 'eat' | 'dance'
     | 'blush' | 'earwiggle' | 'giggle' | 'wave' | 'hop' | 'tailwag'（後三個只有全身角色有動畫）
   variant：'full'（全身，預設，FullBodyAvatar.vue）| 'classic'（舊版圓圓的，SvgAvatar.vue）
-  accessory（配件，選用）：節日 'santa' | 'witch' | 'sakura'；換季 'flowers' | 'strawhat' | 'beret' | 'scarf'（web/src/outfits.js，只有全身角色有）
+  outfit（衣櫥，選用）：實際穿在身上的東西 { head, neck, body, face }（web/src/outfits.js 的 resolveOutfit）。
+    全身角色全部畫得出來；舊版圓圓的只畫得出頭上的節日配件（santa／witch／sakura，當成 accessory 傳下去）。
 
   事件（角色 → 外面）：
     touch { part, side }：被摸／被點到哪個部位（part 見 web/src/avatarParts.js 的 PARTS，side 是 'left'|'right'|null）
@@ -35,7 +36,8 @@
       :mood="mood"
       :label="label"
       :quirk="quirk"
-      :accessory="accessory"
+      :outfit="variant === 'classic' ? undefined : outfit"
+      :accessory="outfit?.head || null"
       :palette="palette"
     />
   </div>
@@ -61,7 +63,7 @@ const props = defineProps({
   // 角色名字，給螢幕報讀器唸的（角色可以改名，所以不寫死）。
   label: { type: String, default: 'PokkaTomo' },
   quirk: { type: String, default: null },
-  accessory: { type: String, default: null },
+  outfit: { type: Object, default: null },
   mood: {
     type: String,
     default: 'calm',

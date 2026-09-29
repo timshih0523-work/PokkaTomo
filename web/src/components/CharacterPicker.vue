@@ -21,7 +21,7 @@
           >
             <button type="button" class="card" :class="{ current: c.id === currentId }" @click="$emit('select', c)">
               <span class="mini" aria-hidden="true">
-                <AvatarAdapter status="IDLE" mood="calm" :variant="c.avatarStyle" :palette="c.palette" :label="nameOf(c)" />
+                <AvatarAdapter status="IDLE" mood="calm" :variant="c.avatarStyle" :palette="c.palette" :outfit="resolveOutfit(c.outfit)" :label="nameOf(c)" />
               </span>
               <span class="card-name">{{ nameOf(c) }}</span>
               <span class="card-level">{{ strings.level(c.level || 1) }}</span>
@@ -140,6 +140,7 @@ import PaletteChooser from './PaletteChooser.vue';
 import PinField from './PinField.vue';
 import { pinErrorMessage } from '../pinErrors.js';
 import { limits } from '../limits.js';
+import { resolveOutfit } from '../outfits.js';
 
 const props = defineProps({
   strings: { type: Object, required: true },

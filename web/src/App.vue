@@ -59,6 +59,9 @@
           <button type="button" class="settings-btn" @click="diaryOpen = true" :aria-label="t.diaryButtonLabel" :title="t.diaryButtonLabel">
             📔
           </button>
+          <button type="button" class="settings-btn" @click="wardrobeOpen = true" :aria-label="t.wardrobe.title" :title="t.wardrobe.title">
+            👗
+          </button>
         </div>
 
         <!-- 設定類：介面語言、聲音、對話泡泡、設定面板。
@@ -167,7 +170,7 @@
           :mood="mood"
           :label="t.touchLabel"
           :quirk="quirk"
-          :accessory="accessory"
+          :outfit="wornOutfit"
           :variant="profile.avatarStyle === 'classic' ? 'classic' : 'full'"
           :palette="profile.palette || 'peach'"
           @touch="onAvatarTouch"
@@ -274,6 +277,18 @@
       @updated="(p) => (profile = { ...profile, ...p })"
     />
 
+    <WardrobePanel
+      :open="wardrobeOpen"
+      :strings="t.wardrobe"
+      :outfit="profile.outfit"
+      :events="events"
+      :palette="profile.palette || 'peach'"
+      :avatar-style="profile.avatarStyle || 'full'"
+      :companion-name="companionName"
+      @close="wardrobeOpen = false"
+      @saved="onWardrobeSaved"
+    />
+
     <SettingsPanel
       :open="settingsOpen"
       :profile="profile"
@@ -334,12 +349,13 @@ import HoldToSpeakButton from './components/HoldToSpeakButton.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import DiaryPanel from './components/DiaryPanel.vue';
 import MemoryPanel from './components/MemoryPanel.vue';
+import WardrobePanel from './components/WardrobePanel.vue';
 import SeasonDecor from './components/SeasonDecor.vue';
 import ParticleLayer from './components/ParticleLayer.vue';
 import FortuneCard from './components/FortuneCard.vue';
 import HourlyWeather from './components/HourlyWeather.vue';
 import { useQuirks, reactionQuirkFor } from './composables/useQuirks.js';
-import { seasonalOutfit } from './outfits.js';
+import { resolveOutfit } from './outfits.js';
 import { MOODS, DEFAULT_MOOD } from './moods.js';
 import { useAvatarStatus } from './composables/useAvatarStatus.js';
 import { useVoice } from './composables/useVoice.js';
@@ -362,6 +378,7 @@ const profile = ref({ nickname: '', personaPrompt: '', preferences: [], annivers
 const settingsOpen = ref(false);
 const diaryOpen = ref(false);
 const memoryOpen = ref(false); // 「記得的事」彈窗
+const wardrobeOpen = ref(false); // 衣櫥
 
 // 目前的情緒（見 server/lib/mood.js）：驅動角色的心情燈、表情、說話語調。
 // AI 每說一句話就更新一次；一段時間沒新的情緒就慢慢回到平靜，不會一直停在難過。
@@ -427,15 +444,9 @@ async function loadCompanion() {
   }
 }
 
-// 節日 → 角色頭上的配件；沒有節日時換季服裝（春：小花、夏：草帽、秋：貝雷帽、冬：圍巾）
-const accessory = computed(() => {
-  const ev = events.value;
-  if (ev.includes('christmas') || ev.includes('christmasEve')) return 'santa';
-  if (ev.includes('halloween')) return 'witch';
-  if (ev.includes('sakura')) return 'sakura';
-  // events 每 10 分鐘重新拿一次（跨日、換季時跟著重算）
-  return seasonalOutfit(new Date());
-});
+// 衣櫥：角色實際穿在身上的東西（profile.outfit 是每個部位的選擇；「自動」的部位跟著節日／季節，見 outfits.js）。
+// events 每 10 分鐘重新拿一次（跨日、換季時跟著重算）
+const wornOutfit = computed(() => resolveOutfit(profile.value.outfit, { events: events.value, date: new Date() }));
 
 const level = computed(() => growth.value?.level || 1);
 
@@ -545,7 +556,7 @@ function onDocKeydown(e) {
   else if (settingMenuOpen.value) settingMenuOpen.value = false;
   else if (hourlyOpen.value) hourlyOpen.value = false;
   // 占卜上面還蓋著日記／記憶／設定面板時，Esc 先關那個面板（面板自己處理），占卜留著
-  else if (fortunePopup.value && !diaryOpen.value && !memoryOpen.value && !settingsOpen.value) fortunePopup.value = null;
+  else if (fortunePopup.value && !diaryOpen.value && !memoryOpen.value && !settingsOpen.value && !wardrobeOpen.value) fortunePopup.value = null;
 }
 document.addEventListener('pointerdown', onDocPointerDown);
 document.addEventListener('keydown', onDocKeydown);
@@ -610,6 +621,26 @@ function previewVoice({ voiceURI, pitch, rate }) {
   if (status.value === 'SPEAKING') stopSpeaking();
   const voice = pickVoice(availableVoices.value, voiceLanguage.value, voiceURI);
   speak(vt.value.settings.voicePreviewText, { lang: vt.value.speechLang, voice, pitch, rate });
+}
+
+// 衣櫥換好衣服：關掉衣櫥，角色開心地說一句（用角色說話的語言；靜音時只顯示）
+function onWardrobeSaved(updatedProfile) {
+  profile.value = { ...profile.value, ...updatedProfile };
+  wardrobeOpen.value = false;
+  if (status.value === 'THINKING' || status.value === 'SPEAKING' || isSending.value) return;
+  if (status.value === 'ASLEEP') return; // 睡著時換好就好，不吵醒
+  const line = pickFrom(vt.value.wardrobeReactions);
+  quirks.playQuirk('hop', { line: false });
+  setMood('joy');
+  // 只在畫面上（不寫進對話紀錄），跟打招呼一樣：泡泡／文字對話都會出現
+  messages.value.push({ role: 'assistant', content: line });
+  scrollToBottom();
+  if (!muted.value) {
+    setStatus('SPEAKING');
+    speak(line, { ...voiceOptions('joy'), onEnd: () => setStatus('HAPPY', { autoRestMs: 900 }) });
+  } else {
+    setStatus('HAPPY', { autoRestMs: 1500 });
+  }
 }
 
 function onProfileSaved(updatedProfile, { message, warning } = {}) {
@@ -837,6 +868,7 @@ function openPicker() {
   settingsOpen.value = false;
   diaryOpen.value = false;
   memoryOpen.value = false;
+  wardrobeOpen.value = false;
   hourlyOpen.value = false;
   pickerOpen.value = true;
 }
@@ -944,6 +976,7 @@ function lockNow() {
   settingsOpen.value = false;
   diaryOpen.value = false;
   memoryOpen.value = false;
+  wardrobeOpen.value = false;
   hourlyOpen.value = false;
   lockMode.value = 'unlock';
 }
@@ -1334,7 +1367,7 @@ const quirks = useQuirks({
   strings: () => t.value,
   level: () => level.value,
   profile: () => profile.value,
-  canAct: () => started && !lockMode.value && !pickerOpen.value && !settingsOpen.value && !diaryOpen.value && !memoryOpen.value && !isSending.value,
+  canAct: () => started && !lockMode.value && !pickerOpen.value && !settingsOpen.value && !diaryOpen.value && !memoryOpen.value && !wardrobeOpen.value && !isSending.value,
   showBubble: (text) => showBubble(text),
   onWake: () => {
     setAsleep(false);

@@ -140,7 +140,7 @@ test('角色清單 app/characters.json：只有編號＋名字（給人看的索
   const list = JSON.parse(readFileSync(path.join(env.dataDir, 'app', 'characters.json'), 'utf-8'));
   assert.deepEqual(list.slice(0, 2), [{ id: '001', name: '毛毛' }, { id: '002', name: '小熊' }]);
   const c = env.readChar('character.json', '002');
-  assert.deepEqual(Object.keys(c), ['id', 'name', 'language', 'personaPrompt', 'avatarStyle', 'palette', 'voice', 'voicePitch', 'voiceRate', 'firstMetAt', 'createdAt']);
+  assert.deepEqual(Object.keys(c), ['id', 'name', 'language', 'personaPrompt', 'avatarStyle', 'palette', 'outfit', 'voice', 'voicePitch', 'voiceRate', 'firstMetAt', 'createdAt']);
   assert.match(c.createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
 });
 

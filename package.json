@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "description": "網頁版 AI 隨身夥伴（PokkaTomo 概念原型），使用 macOS 內建 Apple Foundation Models 作為 LLM 核心",
+  "author": "timshih0523-work",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timshih0523-work/PokkaTomo.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,10 +19,12 @@
     "test:coverage": "node --test --experimental-test-coverage"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "node-forge": "^1.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.4",
+    "qrcode-generator": "^2.0.4",
     "vite": "^5.4.11",
     "vue": "^3.5.13"
   },

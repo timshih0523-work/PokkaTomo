@@ -1,12 +1,11 @@
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync } from 'fs';
 import { setupTestEnv } from './helpers/env.js';
 
 const env = setupTestEnv();
 after(() => env.cleanup());
 beforeEach(() => {
-  rmSync(env.dataDir, { recursive: true, force: true });
+  env.resetData();
   env.setFm({ byKind: { greet: '[mood:joy] 早安呀！' } });
   env.clearFmCalls();
 });

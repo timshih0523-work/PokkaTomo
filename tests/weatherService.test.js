@@ -1,7 +1,6 @@
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'http';
-import { rmSync } from 'fs';
 import { setupTestEnv } from './helpers/env.js';
 
 // 假的 Open-Meteo：依官方文件的回應格式；mode 可以切成「永遠不回應」「500」
@@ -69,7 +68,7 @@ test('地名 → 地點；找不到回傳 null', async () => {
 });
 
 test('沒設定地點 → 沒天氣', async () => {
-  rmSync(env.dataDir, { recursive: true, force: true });
+  env.resetData();
   assert.equal(await ws.getWeather(), null);
 });
 

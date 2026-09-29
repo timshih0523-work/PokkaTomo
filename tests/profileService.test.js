@@ -5,11 +5,19 @@ import { setupTestEnv } from './helpers/env.js';
 
 const env = setupTestEnv();
 after(() => env.cleanup());
-beforeEach(() => rmSync(env.dataDir, { recursive: true, force: true }));
+beforeEach(() => env.resetData());
 const ps = await import('../server/profileService.js');
 const { LIMITS } = await import('../server/config.js');
 
-test('沒有檔案 → 建立第一個角色 001、預設值（稱呼主人）', async () => {
+test('一個角色都沒有：不會自動建立角色，getProfile 回 no_character', async () => {
+  rmSync(env.dataDir, { recursive: true, force: true });
+  await assert.rejects(ps.getProfile(), (err) => err.code === 'no_character' && err.status === 409);
+  const { listCharacters } = await import('../server/characterService.js');
+  assert.deepEqual(await listCharacters(), []);
+  assert.equal(env.readData('app/characters.json'), undefined, '沒有寫出任何角色');
+});
+
+test('新角色什麼都沒改：預設值（稱呼主人、預設個性、沒有城市）', async () => {
   const p = await ps.getProfile();
   assert.equal(p.characterId, '001');
   assert.equal(p.nickname, '主人');

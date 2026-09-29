@@ -11,15 +11,19 @@ import { fileURLToPath } from 'url';
 import apiRoutes from './routes/index.js';
 import { errorHandler } from './lib/errorHandler.js';
 import { localOnly } from './lib/localOnly.js';
+import { lanGuard } from './lib/lanGuard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-export function createApp() {
+/**
+ * @param {{ lan?: boolean }} [opts] lan: true = 給「手機／平板連線」那個 port 用（見 lanService.js），改用 lanGuard 檢查
+ */
+export function createApp({ lan = false } = {}) {
   const app = express();
 
-  // 最先檢查：只接受從這台電腦開的連線（見 lib/localOnly.js）
-  app.use(localOnly);
+  // 最先檢查：本機的 port 只接受從這台電腦開的連線（lib/localOnly.js）；手機連線的 port 只接受家裡網路（lib/lanGuard.js）
+  app.use(lan ? lanGuard : localOnly);
   app.use(express.json({ limit: '1mb' }));
   app.use(express.static(PUBLIC_DIR));
 

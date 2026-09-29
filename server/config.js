@@ -10,6 +10,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 export const PORT = Number(process.env.PORT || 3000);
+// 「手機／平板連線」打開時另外聽的 port（見 lanService.js）；平常不會開。
+// 這個 port 是 HTTPS（自己發的憑證，見 lib/lanTls.js）；LAN_SETUP_PORT 是 HTTP 的「第一次設定」頁（下載憑證＋步驟，見 lanSetupApp.js）。
+export const LAN_PORT = Number(process.env.POKKATOMO_LAN_PORT) || PORT + 1;
+export const LAN_SETUP_PORT = Number(process.env.POKKATOMO_LAN_SETUP_PORT) || LAN_PORT + 1;
 
 // 資料檔（聊天紀錄、設定、日記、角色狀態）放在哪個資料夾。平常就是 server/data；
 // 自動測試會把它指到暫存資料夾，才不會蓋掉使用者真正的資料。

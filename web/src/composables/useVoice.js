@@ -10,18 +10,94 @@
 //     才能出聲的限制，所以提供 unlockAudio()，讓「按住說話」按鈕的第一次
 //     互動順便觸發一次靜音的 utterance，之後才能正常朗讀 AI 回覆。
 
+//   - 手機／平板（家裡 Wi‑Fi 連線、HTTPS）：不用瀏覽器的辨識（iPhone 上的 Chrome 不穩定），改成錄音後
+//     交給 Mac 辨識（serverMode：recorder.js → POST /api/speech → server/speechService.js）。
+
+import { computed } from 'vue';
 import { sanitizeForSpeech } from '../voices.js';
+import { serverFeatures } from '../limits.js';
+import { recorderSupported, startRecording } from '../recorder.js';
 
 const SpeechRecognitionCtor =
   typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
+// 手機／平板用家裡網路連過來時是 HTTP（不是安全連線），瀏覽器不給用麥克風 → 當成不支援語音輸入，直接用打字
+export const insecureContext = typeof window !== 'undefined' && window.isSecureContext === false;
+
 export function useVoice() {
-  const supported = !!SpeechRecognitionCtor;
+  // 手機連線＋Mac 的辨識可以用＋這個瀏覽器能錄音 → 錄音交給 Mac；否則用瀏覽器自己的辨識（電腦上的 Chrome）
+  const serverMode = computed(() => serverFeatures.lan && serverFeatures.serverSpeech && recorderSupported());
+  const supported = computed(() => serverMode.value || (!serverFeatures.lan && !!SpeechRecognitionCtor && !insecureContext));
   let recognition = null;
   let audioUnlocked = false;
 
-  function startListening({ onResult, onEnd, onError, lang = 'zh-TW' } = {}) {
-    if (!supported) return;
+  // ---- serverMode：錄音 → Mac 辨識 ----
+  let session = null; // 這一次按住說話：{ recPromise, stopRequested, onResult, onError, finish }
+
+  async function startServerListening({ onResult, onEnd, onError, onTranscribing }) {
+    let ended = false;
+    const finish = () => {
+      if (ended) return;
+      ended = true;
+      if (session === s) session = null;
+      onEnd?.();
+    };
+    const s = { stopRequested: false, onResult, onError, onTranscribing, finish, rec: null };
+    session = s;
+    try {
+      s.rec = await startRecording({ onAutoStop: () => stopListening() });
+    } catch (err) {
+      onError?.(err?.name === 'NotAllowedError' || err?.name === 'SecurityError' ? 'not-allowed' : 'audio-capture');
+      finish();
+      return;
+    }
+    // 麥克風還沒準備好就放開了（例如第一次跳出「允許麥克風」的詢問）
+    if (s.stopRequested) await finishServerListening(s);
+  }
+
+  async function finishServerListening(s) {
+    if (!s.rec) {
+      s.stopRequested = true;
+      return;
+    }
+    const rec = s.rec;
+    s.rec = null;
+    let blob = null;
+    try {
+      blob = await rec.stop();
+    } catch {
+      blob = null;
+    }
+    if (!blob) {
+      s.onError?.('no-speech');
+      s.finish();
+      return;
+    }
+    s.onTranscribing?.();
+    try {
+      const res = await fetch('/api/speech', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (data?.error === 'speech_unavailable') serverFeatures.serverSpeech = false; // 改成打字
+        s.onError?.(data?.error === 'speech_unavailable' ? 'server-unavailable' : 'server-error');
+      } else if (data?.text) {
+        s.onResult?.(data.text);
+      } else {
+        s.onError?.('no-speech');
+      }
+    } catch {
+      s.onError?.('network');
+    } finally {
+      s.finish();
+    }
+  }
+
+  function startListening({ onResult, onEnd, onError, onTranscribing, lang = 'zh-TW' } = {}) {
+    if (!supported.value) return;
+    if (serverMode.value) {
+      startServerListening({ onResult, onEnd, onError, onTranscribing });
+      return;
+    }
 
     // 每次重新建立一個 instance，避免上一輪的 onend/onresult 互相影響。
     recognition = new SpeechRecognitionCtor();
@@ -50,6 +126,11 @@ export function useVoice() {
   }
 
   function stopListening() {
+    if (session) {
+      const s = session;
+      if (s.rec || !s.stopRequested) finishServerListening(s);
+      return;
+    }
     try {
       recognition?.stop();
     } catch {
@@ -145,5 +226,5 @@ export function useVoice() {
     }
   }
 
-  return { supported, startListening, stopListening, unlockAudio, speak, stopSpeaking };
+  return { supported, serverMode, startListening, stopListening, unlockAudio, speak, stopSpeaking };
 }

@@ -2,6 +2,7 @@
   CharacterPicker.vue — 選角色（輸入密碼之後、或按上方「換角色」）。也可以在這裡新增角色。
   每個角色有自己的名字、外觀、毛色、對話、日記、親密度（後端 server/characterService.js、lib/characterContext.js）。
   個性描述等細節新增後在設定面板改。
+  程式不會自動建立角色：一個都沒有時直接打開新增表單（稱呼、個性等用預設值，見 server/routes/characters.js）。
   emit('select', character)
 -->
 <template>
@@ -11,7 +12,13 @@
         <h2 class="picker-title">{{ strings.title }}</h2>
         <p v-if="error" class="picker-error" role="alert">{{ error }}</p>
         <div class="grid">
-          <div v-for="c in characters" :key="c.id" class="card-wrap">
+          <div
+            v-for="c in characters"
+            :key="c.id"
+            class="card-wrap"
+            :class="{ dragging: dragId === c.id }"
+            :data-id="c.id"
+          >
             <button type="button" class="card" :class="{ current: c.id === currentId }" @click="$emit('select', c)">
               <span class="mini" aria-hidden="true">
                 <AvatarAdapter status="IDLE" mood="calm" :variant="c.avatarStyle" :palette="c.palette" :label="nameOf(c)" />
@@ -19,9 +26,23 @@
               <span class="card-name">{{ nameOf(c) }}</span>
               <span class="card-level">{{ strings.level(c.level || 1) }}</span>
             </button>
-            <!-- 刪除：只剩一隻的時候不能刪 -->
+            <!-- 拖曳排序：按住左上角的把手拖到想要的位置（滑鼠、手指都可以） -->
             <button
               v-if="characters.length > 1"
+              type="button"
+              class="card-handle"
+              :aria-label="strings.dragLabel(nameOf(c))"
+              :title="strings.dragLabel(nameOf(c))"
+              @pointerdown="startDrag($event, c)"
+              @keydown.left.prevent="moveBy(c, -1)"
+              @keydown.up.prevent="moveBy(c, -1)"
+              @keydown.right.prevent="moveBy(c, 1)"
+              @keydown.down.prevent="moveBy(c, 1)"
+            >
+              ⠿
+            </button>
+            <!-- 刪除（最後一隻也可以刪：刪完回到「還沒有角色」，會直接打開新增表單） -->
+            <button
               type="button"
               class="card-delete"
               :aria-label="strings.deleteLabel(nameOf(c))"
@@ -38,7 +59,7 @@
         </div>
       </template>
 
-      <!-- 刪除角色：再輸入一次密碼確認。資料不會直接刪掉，後端搬到 backups/deleted-characters/ -->
+      <!-- 刪除角色：再輸入一次密碼確認。資料會整個刪掉，無法復原 -->
       <form v-else-if="deleting" class="add-form delete-form" @submit.prevent="confirmDelete">
         <h2 class="picker-title">{{ strings.deleteTitle(nameOf(deleting)) }}</h2>
         <span class="preview" aria-hidden="true">
@@ -54,7 +75,7 @@
       </form>
 
       <form v-else class="add-form" @submit.prevent="create">
-        <h2 class="picker-title">{{ strings.newTitle }}</h2>
+        <h2 class="picker-title">{{ characters.length ? strings.newTitle : strings.firstTitle }}</h2>
         <span class="preview" aria-hidden="true">
           <AvatarAdapter status="HAPPY" mood="joy" :variant="form.avatarStyle" :palette="form.palette" :label="form.name || defaultName" />
         </span>
@@ -103,7 +124,8 @@
         <PaletteChooser v-model="form.palette" :label="strings.paletteLabel" :names="paletteNames" />
         <p v-if="error" class="picker-error" role="alert">{{ error }}</p>
         <div class="form-actions">
-          <button type="button" class="btn-secondary" @click="adding = false">{{ strings.cancel }}</button>
+          <!-- 一個角色都沒有時不能取消（沒有角色就不能開始），只能新增 -->
+          <button v-if="characters.length" type="button" class="btn-secondary" @click="adding = false">{{ strings.cancel }}</button>
           <button type="submit" class="btn-primary" :disabled="saving">{{ strings.create }}</button>
         </div>
       </form>
@@ -146,6 +168,8 @@ async function load() {
     if (!res.ok) throw new Error();
     characters.value = (await res.json()).characters || [];
     error.value = '';
+    // 還沒有任何角色（全新安裝、全部刪掉）：程式不會自動建立，直接打開新增表單（套用預設值）
+    if (!characters.value.length && !adding.value) startAdd();
   } catch {
     error.value = props.strings.loadFailed;
   }
@@ -183,6 +207,69 @@ async function create() {
   }
 }
 
+// ---- 拖曳排序 ----
+// 用 pointer 事件自己做（HTML5 drag & drop 在 iPad／iPhone 上不能用）：按住把手 → 手指／滑鼠移到哪張卡片上，
+// 就把拖著的角色插到那個位置；放開時有變動才存（PUT /api/characters/order）。鍵盤：把手上按方向鍵。
+const dragId = ref(null);
+let orderBefore = '';
+function startDrag(e, c) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  dragId.value = c.id;
+  orderBefore = characters.value.map((x) => x.id).join(',');
+  // move／up 掛在 window：拖曳時卡片會在畫面上重新排列，把手元素被搬動後會失去 pointer capture，
+  // 掛在把手上就收不到後面的 move／up（以前就是這樣，放開後順序沒存到）
+  const onMove = (ev) => {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.card-wrap');
+    const overId = el?.dataset.id;
+    if (!overId || overId === dragId.value) return;
+    const list = characters.value.slice();
+    const from = list.findIndex((x) => x.id === dragId.value);
+    const to = list.findIndex((x) => x.id === overId);
+    if (from === -1 || to === -1) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    characters.value = list;
+  };
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    dragId.value = null;
+    saveOrder();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+}
+function moveBy(c, delta) {
+  const list = characters.value.slice();
+  const i = list.findIndex((x) => x.id === c.id);
+  const j = i + delta;
+  if (i === -1 || j < 0 || j >= list.length) return;
+  orderBefore = list.map((x) => x.id).join(',');
+  [list[i], list[j]] = [list[j], list[i]];
+  characters.value = list;
+  saveOrder();
+}
+async function saveOrder() {
+  const ids = characters.value.map((x) => x.id);
+  if (ids.join(',') === orderBefore) return;
+  try {
+    const res = await fetch('/api/characters/order', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) throw new Error();
+    characters.value = (await res.json()).characters || characters.value;
+    error.value = '';
+  } catch {
+    error.value = props.strings.orderFailed;
+    load(); // 存失敗就回到伺服器上的順序
+  }
+}
+
 // ---- 刪除角色 ----
 const deleting = ref(null);
 const pin = ref('');
@@ -204,8 +291,7 @@ async function confirmDelete() {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       pin.value = '';
-      if (data?.error === 'last_character') error.value = props.strings.lastOne;
-      else if (data?.error === 'wrong_pin' || data?.error === 'too_many_attempts') error.value = pinErrorMessage(data, props.lockStrings);
+      if (data?.error === 'wrong_pin' || data?.error === 'too_many_attempts') error.value = pinErrorMessage(data, props.lockStrings);
       else error.value = props.strings.deleteFailed;
       return;
     }
@@ -265,6 +351,40 @@ defineExpose({ reload: load });
 }
 .card-wrap .card {
   flex: 1;
+}
+.card-handle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: #ffffffcc;
+  font-size: 16px;
+  line-height: 1;
+  color: #7a5c3a;
+  cursor: grab;
+  opacity: 0.55;
+  touch-action: none; /* 手指按住把手拖曳時不要捲動畫面 */
+  -webkit-user-select: none;
+  user-select: none;
+}
+.card-handle:hover,
+.card-handle:focus-visible {
+  opacity: 1;
+}
+.card-wrap.dragging {
+  z-index: 2;
+}
+.card-wrap.dragging .card {
+  transform: scale(1.05);
+  box-shadow: 0 12px 28px rgba(74, 58, 42, 0.25);
+  opacity: 0.92;
+}
+.card-wrap.dragging .card-handle {
+  cursor: grabbing;
+  opacity: 1;
 }
 .card-delete {
   position: absolute;

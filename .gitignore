@@ -13,6 +13,8 @@ Claude outputs/
 # ---- 產生出來的東西 ----
 node_modules/
 server/public/
+# 語音辨識小幫手（server/native/speech.swift 在 Mac 上自動編譯出來的）
+server/native/build/
 dist/
 *.zip
 *.log
@@ -28,3 +30,6 @@ compare_*.md
 
 # ---- 系統檔 ----
 .DS_Store
+
+
+.github/workflows/

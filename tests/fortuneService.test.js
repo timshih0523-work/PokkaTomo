@@ -1,12 +1,11 @@
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync } from 'fs';
 import { setupTestEnv } from './helpers/env.js';
 
 const env = setupTestEnv();
 after(() => env.cleanup());
 beforeEach(() => {
-  rmSync(env.dataDir, { recursive: true, force: true });
+  env.resetData();
   env.setFm({ byKind: { fortune: '[mood:joy] 今天很幸運喔！' } });
   env.clearFmCalls();
 });
@@ -40,12 +39,12 @@ test('同一天再按：同一個結果、不重抽、不重複寫紀錄、不�
 
 test('同一個人同一天抽出來的結果是固定的（用日期當種子），不同天不一定一樣', async () => {
   const a = (await fs_.getTodayFortune(day)).fortune;
-  rmSync(env.dataDir, { recursive: true, force: true });
+  env.resetData();
   const b = (await fs_.getTodayFortune(day)).fortune;
   assert.deepEqual([a.rank, a.color, a.item, a.number], [b.rank, b.color, b.item, b.number]);
   const results = new Set();
   for (let d = 1; d <= 20; d++) {
-    rmSync(env.dataDir, { recursive: true, force: true });
+    env.resetData();
     const f = (await fs_.getTodayFortune(new Date(2026, 9, d))).fortune;
     results.add(`${f.rank}|${f.color}|${f.item}|${f.number}`);
   }

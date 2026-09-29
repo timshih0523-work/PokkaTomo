@@ -29,7 +29,7 @@ async function exists(p) {
 }
 
 // 每日備份放在 backups/daily/YYYY-MM-DD/（裡面是 app/ 跟 characters/ 的完整複本）。
-// backups/ 底下其他資料夾（deleted-characters/、before-import-*/、before-migrate-*/）是重要操作前留的，不會被自動清掉。
+// backups/ 底下其他資料夾（before-import-*/、before-migrate-*/、manual/）是重要操作前留的，不會被自動清掉。
 export const DAILY_DIR = path.join(BACKUP_DIR, 'daily');
 
 /**

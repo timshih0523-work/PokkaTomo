@@ -172,6 +172,15 @@
             <span v-if="importError" class="save-status is-error" role="alert">{{ importError }}</span>
           </div>
 
+          <!-- 手機／平板連線（全部角色共用，後端 server/lanService.js） -->
+          <LanPanel :strings="strings.lan" />
+
+          <!-- 授權（AGPL-3.0：用網路提供服務時也要讓使用者拿得到原始碼，所以放連結） -->
+          <p class="about-line">
+            PokkaTomo © 2026 timshih0523-work ・ AGPL-3.0 ・
+            <a href="https://github.com/timshih0523-work/PokkaTomo" target="_blank" rel="noopener">{{ strings.sourceLink }}</a>
+          </p>
+
     <!-- 儲存結果：成功就直接關掉面板（App.vue 顯示「已儲存」提示）；失敗的訊息放在底部按鈕旁邊，
          不管捲到哪裡都看得到（以前放在表單最下面，要捲到底才看得到，搞不清楚到底存了沒）。 -->
     <template #footer>
@@ -186,6 +195,7 @@
 
 <script setup>
 import PinField from './PinField.vue';
+import LanPanel from './LanPanel.vue';
 import { pinErrorMessage } from '../pinErrors.js';
 import { ref, reactive, watch, computed } from 'vue';
 import BaseDialog from './BaseDialog.vue';
@@ -631,6 +641,15 @@ async function onSave() {
 }
 .data-field .export-btn + .field-hint {
   margin-bottom: 6px;
+}
+.about-line {
+  margin: 14px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+  text-align: center;
+}
+.about-line a {
+  color: inherit;
 }
 .import-confirm {
   display: flex;

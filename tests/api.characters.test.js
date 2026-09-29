@@ -153,3 +153,15 @@ test('聲音設定存在角色上：一個聲音（說話語言固定）、音�
   assert.equal(p1.voice, '', '第一個角色不受影響');
   assert.equal(p1.voicePitch, 1.05);
 });
+
+test('調整角色順序：照給的順序存進 app/characters.json；不認得的忽略、漏掉的接在後面', async () => {
+  const before = (await req('/api/characters')).characters.map((c) => c.id);
+  const reversed = [...before].reverse();
+  const r = await req('/api/characters/order', { method: 'PUT', body: { ids: ['nope', ...reversed.slice(0, -1)] } });
+  assert.deepEqual(r.characters.map((c) => c.id), [...reversed.slice(0, -1), reversed.at(-1)]);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(env.dataDir, 'app', 'characters.json'), 'utf-8')).map((c) => c.id), reversed);
+  assert.deepEqual((await req('/api/characters')).characters.map((c) => c.id), reversed);
+  // 沒指定角色時用清單第一個
+  assert.equal((await req('/api/profile')).characterId, reversed[0]);
+  await req('/api/characters/order', { method: 'PUT', body: { ids: before } });
+});

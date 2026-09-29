@@ -3,20 +3,26 @@
 //   POST /api/log     前端的錯誤回報，寫進紀錄檔（見 lib/logger.js）                    ← 不用密碼
 //   GET  /api/export  下載 zip：所有資料＋給人看的對話紀錄／日記（見 exportService.js）  ← 要密碼（exportRouter）
 //   POST /api/import  上傳匯出的 zip 還原（標頭 X-PokkaTomo-Pin 再確認一次密碼；見 dataAdminService.js）← 要密碼
+//   GET  /api/lan     手機／平板連線的狀態與網址（lanService.js）                              ← 要密碼
+//   PUT  /api/lan     { enabled } 打開／關掉（只能在這台電腦上、而且要先設定密碼）             ← 要密碼
+//   POST /api/lan/speech-check  重新準備語音辨識（編譯＋問權限，見 speechService.js；只能在這台電腦上） ← 要密碼
 
 import express, { Router } from 'express';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { BadRequestError } from '../lib/errors.js';
+import { AppError, BadRequestError } from '../lib/errors.js';
 import { log } from '../lib/logger.js';
 import { buildExport } from '../exportService.js';
 import { importBackup } from '../dataAdminService.js';
-import { verifyPin } from '../lockService.js';
+import { verifyPin, hasPin } from '../lockService.js';
+import { getLanInfo, setLanEnabled } from '../lanService.js';
 import { LIMITS } from '../config.js';
+import { getSpeechStatus, prepareSpeech, speechAvailable } from '../speechService.js';
 
 const router = Router();
 
-router.get('/config', (_req, res) => {
-  res.json({ limits: LIMITS });
+// lan：這個頁面是不是從手機連線開的；serverSpeech：手機上的「按住說話」可不可以交給 Mac 辨識
+router.get('/config', (req, res) => {
+  res.json({ limits: LIMITS, lan: !!req.fromLan, serverSpeech: speechAvailable() });
 });
 
 // 前端只能回報固定幾種等級，欄位都截斷；一分鐘最多 30 筆，避免某個錯誤在迴圈裡洗版紀錄檔。
@@ -69,5 +75,27 @@ exportRouter.post(
     await verifyPin(req.get('x-pokkatomo-pin'));
     const result = await importBackup(req.body);
     res.json({ ok: true, ...result });
+  })
+);
+
+// 手機／平板連線（lanService.js）：看狀態；開關只能在這台電腦上操作（手機上看得到狀態但不能改）
+exportRouter.get('/lan', (req, res) => {
+  res.json({ ...getLanInfo(), speech: getSpeechStatus(), canManage: !req.fromLan });
+});
+exportRouter.post(
+  '/lan/speech-check',
+  asyncHandler(async (req, res) => {
+    if (req.fromLan) throw new AppError('只能在電腦上設定', { status: 403, code: 'lan_manage_local_only' });
+    await prepareSpeech({ force: true });
+    res.json({ ...getLanInfo(), speech: getSpeechStatus(), canManage: true });
+  })
+);
+exportRouter.put(
+  '/lan',
+  asyncHandler(async (req, res) => {
+    if (req.fromLan) throw new AppError('只能在電腦上設定', { status: 403, code: 'lan_manage_local_only' });
+    const on = req.body?.enabled === true;
+    if (on && !(await hasPin())) throw new AppError('要先設定密碼', { status: 400, code: 'pin_required' });
+    res.json({ ...(await setLanEnabled(on)), speech: getSpeechStatus(), canManage: true });
   })
 );

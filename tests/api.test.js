@@ -1,7 +1,6 @@
 // 整個 API 的整合測試：用 app.js 起一個真的 Express app（隨機 port），像前端一樣打 HTTP。
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync } from 'fs';
 import http from 'http';
 import { setupTestEnv } from './helpers/env.js';
 
@@ -21,7 +20,7 @@ after(() => {
   env.cleanup();
 });
 beforeEach(() => {
-  rmSync(env.dataDir, { recursive: true, force: true });
+  env.resetData();
   env.setFm({});
   env.clearFmCalls();
 });

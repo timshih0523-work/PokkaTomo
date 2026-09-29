@@ -120,24 +120,16 @@ async function writeIndex(list) {
   await writeJsonAtomic(CHARACTER_INDEX_PATH, list.map((c) => ({ id: c.id, name: c.name })));
 }
 
-// 一個角色都沒有（全新安裝）：建立第一個角色 001
-async function createFirstCharacter() {
-  const c = normalize({ createdAt: Date.now() }, '001');
-  await writeJsonAtomic(charPaths(c.id).character, toFile(c));
-  await writeIndex([c]);
-  log.info('character_created', { id: c.id, first: true });
-  return [c];
-}
-
 async function readAll() {
   const list = [];
   for (const id of await readIndexIds()) {
     const c = await readCharacterFile(id);
     if (c) list.push(c);
   }
-  const result = list.length ? list : await createFirstCharacter();
-  setFallbackCharacterId(result[0].id);
-  return result;
+  // 一個角色都沒有（全新安裝、全部刪掉）就回傳空清單：不自動建立角色，
+  // 使用者自己在選角色畫面新增（新增時才套用預設值，見 createCharacter／profileService.freshProfile）
+  if (list.length) setFallbackCharacterId(list[0].id);
+  return list;
 }
 
 // 角色清單的增刪改都排同一個隊
@@ -153,7 +145,7 @@ export function listCharacters() {
   return enqueue(CHARACTER_INDEX_PATH, readAll);
 }
 
-/** 找不到（被刪掉、亂傳 id）時回傳第一個角色，確保永遠有一個可以用。 */
+/** 找不到（被刪掉、亂傳 id）時回傳第一個角色；一個角色都沒有時回傳 undefined。 */
 export async function getCharacter(id) {
   const list = await listCharacters();
   return list.find((c) => c.id === id) || list[0];
@@ -212,23 +204,41 @@ export function updateCharacter(id, fields) {
 }
 
 /**
- * 從角色清單拿掉（資料夾的處理在 dataAdminService.deleteCharacter）。至少要留一個角色。
+ * 從角色清單拿掉（資料夾的處理在 dataAdminService.deleteCharacter）。最後一個也可以刪（刪完回到「還沒有角色」）。
  * @returns {Promise<object|null>} 被拿掉的角色；找不到回傳 null
  */
 export function removeCharacter(id) {
   return update(async (list) => {
     const i = list.findIndex((c) => c.id === id);
     if (i === -1) return null;
-    if (list.length <= 1) {
-      const err = new Error('至少要留一個角色');
-      err.code = 'last_character';
-      throw err;
-    }
     const [removed] = list.splice(i, 1);
     await writeIndex(list);
-    setFallbackCharacterId(list[0].id);
+    if (list.length) setFallbackCharacterId(list[0].id);
     log.info('character_removed', { id });
     return removed;
+  });
+}
+
+/**
+ * 調整角色順序（選角色畫面拖曳）。ids 要剛好是現有的角色（順序不同）；不認得的忽略、漏掉的接在後面。
+ * @returns {Promise<object[]>} 新順序的角色清單
+ */
+export function reorderCharacters(ids) {
+  return update(async (list) => {
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const seen = new Set();
+    const next = [];
+    for (const id of Array.isArray(ids) ? ids : []) {
+      if (byId.has(id) && !seen.has(id)) {
+        next.push(byId.get(id));
+        seen.add(id);
+      }
+    }
+    for (const c of list) if (!seen.has(c.id)) next.push(c);
+    await writeIndex(next);
+    if (next.length) setFallbackCharacterId(next[0].id);
+    log.info('characters_reordered', { order: next.map((c) => c.id) });
+    return next;
   });
 }
 

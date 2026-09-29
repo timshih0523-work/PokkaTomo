@@ -19,6 +19,9 @@ export const limits = reactive({
   city: null
 });
 
+// 同一個 /api/config 順便拿的：這個頁面是不是手機連線開的（lan）、手機的「按住說話」能不能交給 Mac 辨識（serverSpeech）
+export const serverFeatures = reactive({ loaded: false, lan: false, serverSpeech: false });
+
 export async function loadLimits(fetchImpl = fetch) {
   try {
     const res = await fetchImpl('/api/config');
@@ -27,6 +30,9 @@ export async function loadLimits(fetchImpl = fetch) {
     for (const k of Object.keys(limits)) {
       if (Number.isFinite(data?.limits?.[k])) limits[k] = data.limits[k];
     }
+    serverFeatures.lan = data?.lan === true;
+    serverFeatures.serverSpeech = data?.serverSpeech === true;
+    serverFeatures.loaded = true;
     return true;
   } catch {
     return false;

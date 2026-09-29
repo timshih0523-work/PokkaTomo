@@ -337,3 +337,29 @@
   公開檔案（AGENTS.md、README*.md、CHANGELOG.md、程式註解、測試資料）改成中性的說法（「使用者」、假的範例名字與日期）；
   私人背景搬到 `AGENTS.local.md`、`CHANGELOG.local.md`（`.gitignore` 裡的 `*.local.md`，只留在開發者電腦上），AGENTS.md／CLAUDE.md 開頭提醒 AI 一起讀。
   `.gitignore` 整理：`server/data/` 整個不上傳（以前只排除暫存檔）、`*.local.md`、`.env*`（範例除外）、`Claude outputs/`、`*.log`。
+- **授權與自動測試**：`LICENSE`（AGPL-3.0-or-later，原作者 timshih0523-work：要保留原作者、改過的版本也要開源，連架成網站提供服務也要公開原始碼）、
+  package.json 的 license／author／repository、README「授權」、設定面板最下面的原始碼連結（AGPL 第 13 條）。
+  `.github/workflows/test.yml`：推上 GitHub 時自動跑 `npm ci`、`npm test`（TZ=Asia/Taipei）、`npm run build`。確認過 UTC 下測試也會過。
+- **角色拖曳排序**：選角色畫面卡片左上角 ⠿，手指、滑鼠都能拖（自己用 pointer 事件做，HTML5 drag & drop 在 iPad 上不能用），也能用方向鍵；`PUT /api/characters/order`。
+  坑：move／up 一開始掛在把手上，卡片重新排列時把手被搬動、失去 pointer capture，後面的事件收不到、放開後順序沒存 → 改掛在 window。
+- **刪除角色改成真的刪**（開發者決定）：整個角色資料夾刪除，每日備份裡那個角色的資料也刪；畫面上的說明改成「無法復原」。
+- **手機／平板連線**（家裡 Wi‑Fi）：設定裡打勾後，另開 `0.0.0.0:3001`（`lanService.js`＋`lanGuard`：只收區網來源、Host 要是區網 IP 或 `<電腦>.local`），
+  設定面板顯示網址＋QR code。開發者問「一定要憑證嗎」→ 不用憑證也能連（HTTP），但瀏覽器規定麥克風只能在 HTTPS 用，所以手機上只能打字；
+  iPhone 上的 Chrome 是 WebKit，就算有 HTTPS 也不一定能語音辨識。`useVoice` 在非安全連線時直接走打字，招呼語也改成教打字。測試 230 → 233 個。
+- **不再自動建立預設角色**（開發者：「不要有預設角色，保留模板在新增時給預設值」）：以前一個角色都沒有時會自動建 `001`。
+  現在清單是空的，打開後設完密碼直接出現「來迎接第一個夥伴吧」的新增表單（沒有取消鈕）；稱呼、個性等預設值只在新增時套用。
+  最後一隻角色也可以刪（刪完回到新增表單）。後端：需要目前角色的 API 在沒有角色時回 409 `no_character`（`NoCharacterError`）；
+  角色清單、新增、匯出匯入、手機連線不受影響。測試的 `setupTestEnv()` 先放一個預設角色 001（`env.resetData()`）。測試 233 → 235 個。
+- **手機／平板也能按住說話**（開發者選「自己發憑證＋Mac 辨識」）：
+  - 手機連線改成 HTTPS：`lib/lanTls.js` 在 Mac 上產生家用 CA＋伺服器憑證（node-forge；IP 變了自動重簽、CA 不換）。
+    新增 HTTP 的「第一次設定」頁（3002，`lanSetupApp.js`）：中／日步驟、下載憑證、自動檢查這台手機是否已信任。設定面板改成兩個 QR code（① 第一次設定 ② 開始使用）。
+  - 為什麼不用手機瀏覽器的語音辨識：iPhone／iPad 上的 Chrome 底層是 WebKit，語音辨識不穩定；但 HTTPS 下錄音都能用。
+    所以手機只錄音（`recorder.js`：自己轉 16kHz WAV，每次放開就關麥克風，避免 iOS 把角色的聲音切成通話音量），
+    Mac 用內建的 Speech 框架辨識（`native/speech.swift` 自動編成 `PokkaTomoSpeech.app`，用 `open` 啟動讓權限詢問算在它自己；優先離線辨識）。
+  - `POST /api/speech`、`POST /api/lan/speech-check`，`/api/config` 多了 `lan`、`serverSpeech`；設定面板顯示語音辨識狀態與該怎麼做。
+  - 匯入備份不會搬走 `tls/`。測試 235 → 241 個（假的辨識程式 `POKKATOMO_SPEECH_BIN`、憑證驗證、設定頁）。在 VM 用 Chromium 假麥克風＋手機尺寸實測到「錄音→辨識→送出」。
+  - 限制：Linux 開發環境沒辦法編譯 speech.swift，Mac 上的編譯與權限詢問要在真機確認。
+- **占卜彈窗改到最上層**：以前放在角色的框裡（z-index 8），文字對話打開時手機上角色變小，彈窗往下超出、被聊天區（z-index 10）蓋住、跟聊天裡的占卜卡片疊在一起。
+  現在是整個畫面最上層的彈出視窗（`.fortune-layer`，fixed、置中、淡淡的底色，點旁邊或 Esc 關閉）。
+  圖層順序：畫面 → 占卜 45 → 日記／記憶／設定面板 50（之後打開的蓋在上面，Esc 先關面板）→ 小提示 80。
+- 手機錄完音讓 AudioContext 暫停（iPhone 上它還在跑時可能維持錄音模式，角色的聲音會從聽筒出來、變很小聲）。

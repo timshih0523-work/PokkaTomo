@@ -1,11 +1,10 @@
 import { test, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync } from 'fs';
 import { setupTestEnv } from './helpers/env.js';
 
 const env = setupTestEnv();
 after(() => env.cleanup());
-beforeEach(() => rmSync(env.dataDir, { recursive: true, force: true }));
+beforeEach(() => env.resetData());
 const cs = await import('../server/companionService.js');
 const cfg = await import('../server/config.js');
 

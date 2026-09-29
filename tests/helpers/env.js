@@ -4,7 +4,9 @@
 // 做的事：
 //   1. 建一個暫存資料夾當 POKKATOMO_DATA_DIR——測試只會讀寫這裡，絕對不會碰到 server/data 裡使用者真正的資料
 //   2. 放一個假的 `fm` 指令（見 fakeFm.js）當 FM_BIN，行為可以在測試中途改（setFm）、每次呼叫都有紀錄（fmCalls）
-//   3. 關掉會影響測試的東西：背景記憶提取、自動開瀏覽器；天氣 API 指到一個不存在的位址
+//   3. 先放好一個預設角色 001（程式本身不會自動建立角色；大部分測試都需要「目前有一個角色」）。
+//      要測「一個角色都沒有」的情況用 rmSync(env.dataDir…)；要清空後再放回 001 用 env.resetData()
+//   4. 關掉會影響測試的東西：背景記憶提取、自動開瀏覽器；天氣 API 指到一個不存在的位址
 //
 // 必須在 import 任何 server/ 的檔案之前呼叫：config.js 是在載入時讀環境變數的。
 
@@ -42,9 +44,24 @@ export function setupTestEnv({ extraEnv = {} } = {}) {
     ...extraEnv
   });
 
+  // 預設角色 001：跟使用者在選角色畫面新增、什麼都不改的角色一樣（中文、預設值）
+  const seedCharacter = (id = '001', fields = {}) => {
+    const p = path.join(dataDir, 'characters', id, 'character.json');
+    mkdirSync(path.dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify({ id, name: '', language: 'zh', createdAt: toLocalIso(Date.now()), ...fields }));
+  };
+  seedCharacter();
+
   return {
     root,
     dataDir,
+    /** 放一個角色（預設 001、中文、其他預設值） */
+    seedCharacter,
+    /** 清空全部資料，再放回預設角色 001 */
+    resetData() {
+      rmSync(dataDir, { recursive: true, force: true });
+      seedCharacter();
+    },
     /** 改變假 fm 的行為，例如 setFm({ reply: '[mood:sad] 嗯…' }) 或 setFm({ fail: 'boom' }) */
     setFm(behavior) {
       writeFileSync(behaviorPath, JSON.stringify(behavior));

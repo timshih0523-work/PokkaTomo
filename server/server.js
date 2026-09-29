@@ -23,6 +23,7 @@ import { log, pruneLogs } from './lib/logger.js';
 import { runDailyBackup } from './backupService.js';
 import { listCharacters } from './characterService.js';
 import { withCharacter } from './lib/characterContext.js';
+import { setLanAppFactory, startLanIfEnabled, stopLan } from './lanService.js';
 
 const app = createApp();
 
@@ -52,6 +53,10 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`\n🐵 PokkaTomo 已經啟動：${url}\n`);
   log.info('server_start', { port: PORT, node: process.version, platform: process.platform });
 
+  // 手機／平板連線：上次有打開就照開（見 lanService.js）
+  setLanAppFactory(() => createApp({ lan: true }));
+  startLanIfEnabled().catch((err) => log.error('lan_start_failed', { error: err.message }));
+
   // start-pokkatomo.command 會自己在確認伺服器準備好之後開瀏覽器（見 config.js 的 OPEN_BROWSER），
   // 這裡只在直接 `npm start` 時才開，避免一次雙擊跑出兩個分頁。
   if (!OPEN_BROWSER) return;
@@ -76,6 +81,7 @@ function shutdown(signal) {
   console.log(`\n[${signal}] PokkaTomo 正在關閉…`);
   log.info('server_stop', { signal });
   server.close();
+  stopLan();
   const forceExit = setTimeout(() => process.exit(0), 1500);
   drainAll().finally(() => {
     clearTimeout(forceExit);

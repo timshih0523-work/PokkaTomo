@@ -162,13 +162,6 @@
             </div>
           </div>
         </Transition>
-        <!-- 今日占卜的結果：蓋在角色上面的小視窗，按 ✕ 關閉 -->
-        <Transition name="bubble-pop">
-          <div v-if="fortunePopup" class="fortune-pop" role="dialog" :aria-label="t.fortune.title">
-            <button type="button" class="pop-close" :aria-label="t.diary.close" :title="t.diary.close" @click="fortunePopup = null">✕</button>
-            <FortuneCard :fortune="fortunePopup" :strings="t.fortune" />
-          </div>
-        </Transition>
         <AvatarAdapter
           :status="status"
           :mood="mood"
@@ -302,6 +295,19 @@
       </div>
     </Transition>
 
+    <!-- 今日占卜的結果：彈出視窗，在整個畫面的最上層（蓋過角色跟文字對話）。
+         以前放在角色的框裡，文字對話打開時（手機上角色變小）會跟下面的聊天紀錄疊在一起、被聊天紀錄蓋住。
+         圖層順序：畫面本身 → 占卜（45）→ 日記／記憶／設定等面板（50，之後打開的蓋在上面）→ 小提示（80）。
+         按 ✕、點旁邊的空白、或按 Esc 關閉。 -->
+    <Transition name="fortune-layer">
+      <div v-if="fortunePopup" class="fortune-layer" @click.self="fortunePopup = null">
+        <div class="fortune-pop" role="dialog" :aria-label="t.fortune.title">
+          <button type="button" class="pop-close" :aria-label="t.diary.close" :title="t.diary.close" @click="fortunePopup = null">✕</button>
+          <FortuneCard :fortune="fortunePopup" :strings="t.fortune" />
+        </div>
+      </div>
+    </Transition>
+
     <!-- 選角色（輸入密碼後、或按左上角名字） -->
     <CharacterPicker
       v-if="pickerOpen && !lockMode"
@@ -346,7 +352,7 @@ import LockScreen from './components/LockScreen.vue';
 import CharacterPicker from './components/CharacterPicker.vue';
 
 const { status, isNight, setStatus, restToIdle, setAsleep } = useAvatarStatus();
-const { speak, stopSpeaking } = useVoice();
+const { speak, stopSpeaking, supported: voiceSupported } = useVoice();
 
 const messages = ref([]);
 const chatLogEl = ref(null);
@@ -538,7 +544,8 @@ function onDocKeydown(e) {
   if (warnOpen.value) warnOpen.value = false;
   else if (settingMenuOpen.value) settingMenuOpen.value = false;
   else if (hourlyOpen.value) hourlyOpen.value = false;
-  else if (fortunePopup.value) fortunePopup.value = null;
+  // 占卜上面還蓋著日記／記憶／設定面板時，Esc 先關那個面板（面板自己處理），占卜留著
+  else if (fortunePopup.value && !diaryOpen.value && !memoryOpen.value && !settingsOpen.value) fortunePopup.value = null;
 }
 document.addEventListener('pointerdown', onDocPointerDown);
 document.addEventListener('keydown', onDocKeydown);
@@ -1251,11 +1258,14 @@ function onVisibilityChange() {
 function maybeShowGreeting() {
   if (messages.value.length > 0) return;
   // 第一次見面：自我介紹＋教怎麼用；之後（以前聊過）就只是打聲招呼
+  // 不能用語音輸入（例如手機上 Mac 的語音辨識還沒準備好）：教打字就好
   const greeting = profile.value.firstMetAt
     ? pickFrom(t.value.greetingReturn)
-    : isNight.value
-      ? t.value.greetingNight
-      : t.value.greetingDay;
+    : !voiceSupported.value
+      ? t.value.greetingTypeOnly
+      : isNight.value
+        ? t.value.greetingNight
+        : t.value.greetingDay;
   messages.value.push({ role: 'assistant', content: greeting });
   setStatus('HAPPY', { autoRestMs: 1500 });
 }
@@ -1408,6 +1418,10 @@ function onVoiceError(code) {
     msgKey = 'micDenied';
   } else if (code === 'no-speech') {
     msgKey = 'micNoSpeech';
+  } else if (code === 'server-unavailable') {
+    msgKey = 'micServerUnavailable'; // 手機：Mac 的語音辨識不能用了（被關掉權限等），改用打字
+  } else if (code === 'network') {
+    msgKey = 'micNetwork';
   }
   showBubble(t.value[msgKey]);
   reportClient('speech_error', code, 'warn');

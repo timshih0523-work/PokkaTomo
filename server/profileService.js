@@ -11,6 +11,7 @@ import { currentCharacterId, charPaths } from './lib/characterContext.js';
 
 import { enqueue } from './lib/asyncQueue.js';
 import { readJson, writeJsonAtomic } from './lib/jsonStore.js';
+import { NoCharacterError } from './lib/errors.js';
 
 const userPath = () => charPaths().user;
 
@@ -54,6 +55,7 @@ async function readUserFile(language) {
  */
 export async function getProfile() {
   const ch = await getCharacter(currentCharacterId());
+  if (!ch) throw new NoCharacterError();
   const user = await readUserFile(ch.language);
   return {
     ...user,
@@ -96,6 +98,7 @@ async function applyPartial(sanitized) {
   const { userPart, charPart } = splitPartial(sanitized);
   if (Object.keys(userPart).length) {
     const ch = await getCharacter(currentCharacterId());
+    if (!ch) throw new NoCharacterError();
     await writeUserPart(userPart, ch.language);
   }
   if (Object.keys(charPart).length) await updateCharacter(currentCharacterId(), charPart);

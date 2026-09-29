@@ -70,10 +70,14 @@ test('記憶搜尋：找封存裡提到關鍵字的話，繁體／日文漢字�
 });
 
 let second;
-test('刪除角色：密碼錯不行；最後一個不能刪；資料搬到 backups/deleted-characters，不是直接刪掉', async () => {
+test('刪除角色：密碼錯不行；資料整個刪掉（連每日備份裡的也刪）', async () => {
   second = (await json('/api/characters', { body: { name: '小熊' } })).character;
   await call('/api/chat', { body: { message: '你好小熊' }, character: second.id });
   assert.ok(existsSync(path.join(env.dataDir, 'characters', second.id)));
+  await new Promise((r) => setTimeout(r, 100)); // 等今天的自動備份寫完
+  const daily = path.join(env.dataDir, 'backups', 'daily');
+  const [day] = readdirSync(daily);
+  assert.ok(existsSync(path.join(daily, day, 'characters', second.id)), '每日備份裡本來有');
 
   const wrong = await call(`/api/characters/${second.id}`, { method: 'DELETE', body: { pin: '1111' } });
   assert.equal(wrong.status, 401);
@@ -81,15 +85,10 @@ test('刪除角色：密碼錯不行；最後一個不能刪；資料搬到 back
   const ok = await json(`/api/characters/${second.id}`, { method: 'DELETE', body: { pin: '2580' } });
   assert.equal(ok.ok, true);
   assert.equal((await json('/api/characters')).characters.length, 1);
-  assert.ok(!existsSync(path.join(env.dataDir, 'characters', second.id)));
-  const del = path.join(env.dataDir, 'backups', 'deleted-characters');
-  const [folder] = readdirSync(del);
-  assert.ok(existsSync(path.join(del, folder, second.id, 'conversations')), '整個角色資料夾原封不動搬過去');
-  assert.equal(JSON.parse(readFileSync(path.join(del, folder, second.id, 'character.json'), 'utf-8')).name, '小熊');
+  assert.ok(!existsSync(path.join(env.dataDir, 'characters', second.id)), '資料夾刪掉了');
+  assert.ok(!existsSync(path.join(daily, day, 'characters', second.id)), '每日備份裡的也刪掉了');
+  assert.ok(!existsSync(path.join(env.dataDir, 'backups', 'deleted-characters')), '不再另外留一份');
   assert.deepEqual(JSON.parse(readFileSync(path.join(env.dataDir, 'app', 'characters.json'), 'utf-8')).map((c) => c.id), ['001']);
-
-  const last = await call('/api/characters/001', { method: 'DELETE', body: { pin: '2580' } });
-  assert.equal(last.status, 400);
 });
 
 test('匯入備份：先把現在的資料搬走再放進去；密碼維持這台的；不是備份檔會拒絕', async () => {
@@ -137,4 +136,29 @@ test('匯入舊版（2026-09 以前）匯出的 zip：自動轉成新結構', as
   assert.ok(existsSync(path.join(env.dataDir, 'characters', '001', 'conversations', '2026-09.jsonl')));
   // 密碼沒有被舊 zip 蓋掉
   assert.equal((await call('/api/lock/unlock', { body: { pin: '2580' } })).status, 200);
+});
+
+test('最後一個角色也可以刪：回到「還沒有角色」，不會自動建立；新增的角色從預設值開始', async () => {
+  for (const c of (await json('/api/characters')).characters) {
+    assert.equal((await json(`/api/characters/${c.id}`, { method: 'DELETE', body: { pin: '2580' } })).ok, true);
+  }
+  assert.deepEqual((await json('/api/characters')).characters, [], '沒有自動建立角色');
+  assert.deepEqual(readdirSync(path.join(env.dataDir, 'characters')), []);
+  // 需要「目前角色」的 API：409 no_character
+  for (const p of ['/api/profile', '/api/history', '/api/companion']) {
+    const r = await call(p);
+    assert.equal(r.status, 409, p);
+    assert.equal((await r.json()).error, 'no_character');
+  }
+  // 不需要角色的照常可以用
+  assert.equal((await call('/api/lan')).status, 200);
+  assert.equal((await call('/api/export')).status, 200);
+  assert.deepEqual((await json('/api/characters')).characters, [], '上面那些請求也沒有順便建立角色');
+
+  const ja = (await json('/api/characters', { body: { name: 'ミミ', language: 'ja' } })).character;
+  const p = await json('/api/profile', { character: ja.id });
+  assert.equal(p.nickname, 'ご主人さま');
+  assert.equal(p.language, 'ja');
+  assert.deepEqual(p.preferences, []);
+  assert.equal(p.location, null);
 });

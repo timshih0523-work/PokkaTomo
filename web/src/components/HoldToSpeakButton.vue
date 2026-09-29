@@ -9,6 +9,8 @@
     - 瀏覽器不支援語音辨識時（目前只有 Chrome / Edge 完整支援 webkitSpeechRecognition，
       Safari 對 Web Speech API 的 STT 支援不穩定或不存在），直接固定顯示文字輸入框，
       不會讓使用者卡在一個沒反應的按鈕上。
+    - 手機／平板（家裡 Wi‑Fi）：錄音後交給 Mac 辨識（useVoice 的 serverMode）。放開後要等 Mac 辨識完，
+      這段時間按鈕顯示「聽清楚中…」、不能再按，角色維持「在聽」的樣子（辨識完才送出 stop-listening）。
     - 支援語音的瀏覽器則另外提供一個「⌨️」按鈕，點一下打開/收起打字輸入框，
       想打字傳訊息時不用只能靠語音。
 -->
@@ -17,8 +19,8 @@
     <div v-if="supported" class="btn-row">
       <button
         class="hold-btn"
-        :class="{ 'is-active': isHolding }"
-        :disabled="disabled"
+        :class="{ 'is-active': isHolding, 'is-busy': transcribing }"
+        :disabled="disabled || transcribing"
         @pointerdown="onPointerDown"
         @pointerup="onPointerUp"
         @pointerleave="onPointerUp"
@@ -62,15 +64,15 @@
     </form>
 
     <p v-if="!supported" class="unsupported-note">
-      {{ strings.unsupportedNote }}
+      {{ insecureContext || serverFeatures.lan ? strings.unsupportedNoteRemote : strings.unsupportedNote }}
     </p>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { useVoice } from '../composables/useVoice.js';
-import { limits } from '../limits.js';
+import { useVoice, insecureContext } from '../composables/useVoice.js';
+import { limits, serverFeatures } from '../limits.js';
 import { getStrings } from '../i18n.js';
 
 const props = defineProps({
@@ -88,15 +90,21 @@ const props = defineProps({
 
 const emit = defineEmits(['start-listening', 'result', 'stop-listening', 'unlock-audio', 'voice-error']);
 
-const { supported, startListening, stopListening, unlockAudio } = useVoice();
+const { supported, serverMode, startListening, stopListening, unlockAudio } = useVoice();
 
 const isHolding = ref(false);
+const transcribing = ref(false); // 手機：放開後等 Mac 辨識中
 const fallbackText = ref('');
 // 語音辨識可用時，打字框預設收起（用⌨️按鈕打開）；不支援語音時，直接固定打開。
-const showTextInput = ref(!supported);
+const showTextInput = ref(!supported.value);
+// 能不能用語音是從伺服器拿到設定後才確定的（手機上 Mac 的辨識不能用時會變成打字）
+watch(supported, (ok) => {
+  if (!ok) showTextInput.value = true;
+});
 let unlocked = false;
 
 const hint = computed(() => {
+  if (transcribing.value) return props.strings.hintTranscribing;
   if (props.disabled) return props.busyHint || props.strings.hintBusy;
   if (isHolding.value) return props.strings.hintRelease;
   return props.idleHint || props.strings.hintHold;
@@ -122,7 +130,7 @@ function ensureAudioUnlocked() {
 }
 
 function onPointerDown(e) {
-  if (props.disabled) return;
+  if (props.disabled || transcribing.value) return;
   e.preventDefault();
   ensureAudioUnlocked();
   isHolding.value = true;
@@ -130,8 +138,10 @@ function onPointerDown(e) {
   startListening({
     lang: props.lang,
     onResult: (text) => emit('result', text),
+    onTranscribing: () => (transcribing.value = true),
     onEnd: () => {
       isHolding.value = false;
+      transcribing.value = false;
       emit('stop-listening');
     },
     // 沒給麥克風權限、沒偵測到聲音等等——之前這裡完全沒接，使用者按了沒反應
@@ -144,7 +154,8 @@ function onPointerUp() {
   if (!isHolding.value) return;
   isHolding.value = false;
   stopListening();
-  emit('stop-listening');
+  // 手機（Mac 辨識）：辨識完 onEnd 才送 stop-listening，角色在這段時間維持「在聽」
+  if (!serverMode.value) emit('stop-listening');
 }
 
 // 日文/中文輸入法（IME）選字時按的 Enter 是「確定這個字」，不是「送出訊息」。

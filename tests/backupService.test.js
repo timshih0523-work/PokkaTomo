@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, mkdirSync, readFileSync, rmSync } from 'fs';
 import path from 'path';
 import { setupTestEnv } from './helpers/env.js';
 
@@ -13,6 +13,7 @@ after(() => env.cleanup());
 const backupDir = () => path.join(env.dataDir, 'backups', 'daily');
 
 test('沒有任何資料時不備份', async () => {
+  rmSync(env.dataDir, { recursive: true, force: true }); // 連預設角色都沒有
   assert.equal(await backup.runDailyBackup(new Date(2026, 8, 1)), null);
 });
 

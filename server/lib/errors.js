@@ -18,6 +18,13 @@ export class BadRequestError extends AppError {
   }
 }
 
+// 一個角色都沒有（全新安裝、全部刪掉）時，需要「目前角色」的 API 回這個；前端看到就打開選角色畫面
+export class NoCharacterError extends AppError {
+  constructor(message = '還沒有角色，請先新增一個角色') {
+    super(message, { status: 409, code: 'no_character' });
+  }
+}
+
 export class FmUnavailableError extends AppError {
   constructor(message) {
     super(message, { status: 503, code: 'fm_unavailable' });

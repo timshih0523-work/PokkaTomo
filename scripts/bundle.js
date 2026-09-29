@@ -41,7 +41,7 @@ function main() {
 
   // 排除不需要交給使用者的東西：node_modules、.git、.env（可能有敏感金鑰）、舊 zip、log，
   // 以及這台電腦上所有的資料（server/data/：角色、對話、日記、密碼、備份、紀錄檔）——
-  // 那是開發者自己測試時的內容，不應該跟著送到對方手上。對方第一次打開時程式會自己建立第一個角色、請她設密碼。
+  // 那是開發者自己測試時的內容，不應該跟著送到對方手上。對方第一次打開時會先設密碼、再自己新增第一個角色。
   const excludes = [
     'node_modules/*',
     '.git/*',
@@ -50,6 +50,8 @@ function main() {
     'pokkatomo.log',
     '.DS_Store',
     'server/data/*',
+    // 語音辨識小幫手是在每台 Mac 上自己編譯的（簽章跟權限都跟著那台電腦）
+    'server/native/build/*',
     // 自動測試是給開發者用的，她的電腦不需要
     'tests/*'
   ];

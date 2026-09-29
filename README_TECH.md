@@ -22,7 +22,7 @@
 | AI 模型 | macOS 內建 **Apple Foundation Models**，透過指令列工具 `fm` 呼叫，完全在本機，沒有雲端 API、不用錢 |
 | 語言 | 分兩種：角色**說話的語言**（回覆、語音、日記、稱呼、預設個性；建立角色時決定、不能改）和**介面顯示的語言**（隨時切換）。繁體中文／日文 |
 | 隱私 | 所有資料存在本機 JSON 檔；伺服器只聽 127.0.0.1，同網路的其他裝置連不進來 |
-| 手機 | 目前刻意不支援（見「9. 已知限制」），但畫面有做 RWD |
+| 手機 | 設定裡打開「手機／平板連線」後，同一個 Wi‑Fi 的 iPhone／iPad 可以用（HTTPS＋自己發的憑證；按住說話由 Mac 辨識，見 4.15） |
 
 進入畫面：**四位數密碼**（第一次先設定）→ **選角色**（可以有好幾個角色，各自獨立）→ 開始聊天；閒置 15 分鐘自動上鎖。
 
@@ -77,6 +77,8 @@ pokkatomo_apple/
 ├─ stop-pokkatomo.command       # 一鍵關閉
 ├─ autostart-on.command        # 登入 Mac 時自動打開 PokkaTomo（加進 macOS 登入項目）
 ├─ autostart-off.command       # 取消上面那個
+├─ LICENSE                     # AGPL-3.0（原作者 timshih0523-work）
+├─ .github/workflows/test.yml  # 推上 GitHub 時自動跑 npm test＋build
 ├─ package.json                # scripts：dev / build / start / bundle / test / test:coverage
 ├─ vite.config.js              # 前端建置（輸出 server/public；dev proxy 指向 127.0.0.1:PORT）
 ├─ scripts/
@@ -93,11 +95,14 @@ pokkatomo_apple/
 │  ├─ historyService.js        # 對話的讀寫入口（最近 N 則從對話檔讀）；關鍵記憶提取
 │  ├─ archiveService.js        # ★ 對話資料庫 characters/<編號>/conversations/YYYY-MM.jsonl（唯一一份，只追加）
 │  ├─ ragService.js            # 輕量 RAG：BM25 索引封存對話＋日記，聊天時找相關舊事
-│  ├─ characterService.js      # 角色：character.json＋app/characters.json 清單（新增、改、刪、全新安裝建 001）
+│  ├─ characterService.js      # 角色：character.json＋app/characters.json 清單（新增、改、刪、排序；不自動建立角色）
 │  ├─ lockService.js           # 四位數密碼（scrypt）、session token、輸錯鎖定
 │  ├─ backupService.js         # 每天第一次使用時自動備份 app/＋characters/ 到 backups/daily/（留 14 份）
 │  ├─ exportService.js         # 匯出 zip（對話紀錄.txt、日記.txt、原始資料、紀錄檔）
-│  ├─ dataAdminService.js      # 刪除角色、匯入備份（資料都先搬到 backups/，不直接刪）
+│  ├─ dataAdminService.js      # 刪除角色（真的刪）、匯入備份（先把現在的資料搬到 backups/）
+│  ├─ lanService.js            # 手機／平板連線：HTTPS（3001）＋第一次設定頁（HTTP 3002）
+│  ├─ lanSetupApp.js           # 手機第一次設定頁：安裝憑證的步驟＋下載 CA
+│  ├─ speechService.js         # 手機錄音 → Mac 語音辨識（native/speech.swift 自動編譯成 native/build/PokkaTomoSpeech.app）
 │  ├─ diaryService.js          # 每個角色的 diary.json：寫日記、補寫、中期記憶
 │  ├─ greetService.js          # 主動問候
 │  ├─ companionService.js      # 每個角色的 state.json：親密度、睡覺、出門、觸摸統計、今天的占卜
@@ -198,6 +203,7 @@ pokkatomo_apple/
 全部是 JSON。沒有列出的欄位不要依賴。
 除了 health、config、log、`/lock/*`，**都要帶 `X-PokkaTomo-Token`**（有設密碼時）；
 跟角色有關的（profile、history、chat、greet、diary、companion、fortune）用 `X-PokkaTomo-Character` 決定是哪個角色（沒帶＝第一個角色）。
+一個角色都沒有時，只有 lock、config、log、`/characters*`、`/export`、`/import`、`/lan` 可以用，其他回 409 `no_character`（前端打開新增角色）。
 前端由 `web/src/api.js` 自動加這兩個標頭。
 
 | 方法與路徑 | 請求 | 回應 |
@@ -209,7 +215,12 @@ pokkatomo_apple/
 | `POST /api/lock/lock` | token | `{ ok: true }`（這個 token 作廢） |
 | `GET /api/characters` | — | `{ characters: [{ id, name, avatarStyle, palette, firstMetAt, level }] }` |
 | `POST /api/characters` | `{ name?, avatarStyle?, palette?, language? }` | `{ character }`；最多 12 個；其他設定一律預設值（4.12） |
-| `DELETE /api/characters/:id` | `{ pin }` | `{ ok, id, name, movedTo }`；密碼錯 401 `wrong_pin`（含 `attemptsLeft`）、太多次 429；最後一個 400 `last_character` |
+| `PUT /api/characters/order` | `{ ids }` | `{ characters }`：照這個順序存（不認得的忽略、漏掉的接在後面）；第一個＝沒指定角色時用的 |
+| `GET /api/lan` | — | `{ enabled, running, port, setupPort, urls, setupUrls, caFingerprint, error, speech, canManage }`（手機連線的狀態；`speech` = 語音辨識狀態，見 4.15；`canManage` = 是不是在這台電腦上） |
+| `POST /api/lan/speech-check` | — | 同上；重新準備語音辨識（編譯＋問權限）。只能在這台電腦上 |
+| `POST /api/speech` | body＝WAV（`audio/wav`，最多 8MB） | `{ text }`（沒聽到＝空字串）；用目前角色說話的語言；還不能用 503 `speech_unavailable`、失敗 500 `speech_failed` |
+| `PUT /api/lan` | `{ enabled }` | 同上；只能在這台電腦上（手機上 403 `lan_manage_local_only`），打開前要先設定密碼（400 `pin_required`） |
+| `DELETE /api/characters/:id` | `{ pin }` | `{ ok, id, name }`（資料整個刪掉，無法復原）；密碼錯 401 `wrong_pin`（含 `attemptsLeft`）、太多次 429；最後一個也可以刪（刪完＝沒有角色） |
 | `GET /api/memory/search?q=` | 關鍵字（最多 50 字） | `{ conversations: [{ ts, role, content }] }`：目前角色封存裡提到關鍵字的話，新到舊最多 30 則，繁／日漢字互通 |
 | `POST /api/import` | body＝匯出的 zip（`Content-Type: application/zip`，最大 300MB）＋標頭 `X-PokkaTomo-Pin` | `{ ok, files, characters, previousMovedTo }`；不是備份檔 400 `not_backup`／`bad_zip`／`bad_backup`（見 4.11） |
 
@@ -357,7 +368,6 @@ server/data/
 │     └─ conversations/YYYY-MM.jsonl 全部對話（唯一一份，只追加）
 ├─ backups/
 │  ├─ daily/YYYY-MM-DD/              每日自動備份（app/＋characters/ 完整複製，留 14 份）
-│  ├─ deleted-characters/<時間>/<編號>/  刪掉的角色（整個資料夾）
 │  ├─ before-import-<時間>/          匯入備份前的資料
 │  ├─ before-migrate-<時間>/         2026-09 從舊結構轉換前的原始檔案
 │  └─ manual/                        手動留的備份
@@ -442,7 +452,7 @@ server/data/
 `..`、壞檔備份、暫存檔、其他檔案一律忽略），**密碼不匯入（維持這台的）**。JSON 先全部檢查能解析才動手。
 接著把現在的資料（除了 `backups/`、`logs/`、`app/security.json`）整份搬到 `backups/before-import-<日期時間>/`，再寫入 zip 的資料，
 最後 `resetCaches()`（`lib/cacheRegistry.js`：RAG 索引、封存匯入狀態、日記版本、天氣快取）。前端回到選角色畫面。
-每日備份的自動清理只清 `backups/daily/`，不會刪到 `before-import-*`、`deleted-characters/`。
+每日備份的自動清理只清 `backups/daily/`，不會刪到 `before-import-*`。
 
 ### 4.12 多角色（`characterService.js`、`lib/characterContext.js`）
 
@@ -455,7 +465,8 @@ server/data/
   讀取時沒改過的預設個性一律顯示角色語言的版本；說話的語言由新增表單上的「說話的語言（建立後不能更改）」選（預設選在畫面目前的語言）。
   只有密碼（`app/security.json`）是共用的；右上角的靜音、💭 泡泡、💬 文字對話開關是這台瀏覽器的偏好（localStorage）。
 - 角色：`characters/<編號>/character.json`；順序在 `app/characters.json`（沒有或壞掉時照資料夾編號排）。
-  編號 `001`、`002`…（新角色＝現有最大編號＋1）。一個角色都沒有（全新安裝）時自動建立 `001`。
+  編號 `001`、`002`…（新角色＝現有最大編號＋1）。一個角色都沒有（全新安裝、全部刪掉）時**不自動建立**：清單是空的，前端直接打開新增表單；
+  預設值（稱呼、個性…）只在新增時套用（`createCharacter`＋`freshProfile`）。
   沒指定角色、或指定的不存在時用清單第一個（`setFallbackCharacterId`）。
 - **怎麼知道是哪個角色**：`AsyncLocalStorage`。請求進來時 `withCharacter(id, next)`，之後這個請求裡所有的非同步工作
   （包含不 await 的背景記憶提取、補寫日記）呼叫 `currentCharacterId()`／`charPaths()` 都拿到同一個角色。
@@ -464,8 +475,9 @@ server/data/
 - `getProfile()` 回傳「使用者資料＋目前角色的欄位」（對外仍用 `companionName` 等舊名字），`saveProfile()` 自動拆成兩邊存，
   所以 prompt、日記、設定面板都不用知道有多角色。
 - **刪除角色**（選角色畫面卡片右上角 🗑 → 再輸入一次密碼 → `DELETE /api/characters/:id`，`dataAdminService.deleteCharacter`）：
-  從清單拿掉（至少留一個），資料**不直接刪**：整個 `characters/<編號>/` 搬到 `backups/deleted-characters/<日期時間>/<編號>/`。
-  要救回來：資料夾搬回 `characters/`、在 `app/characters.json` 加回一行。
+  從清單拿掉（至少留一個），**整個 `characters/<編號>/` 刪掉，每日備份裡那個角色的資料也刪**，無法復原（開發者決定：刪了就算了）。
+- **排序**（選角色畫面卡片左上角 ⠿ 拖曳，或把手上按方向鍵 → `PUT /api/characters/order`）：存進 `app/characters.json` 的順序。
+  拖曳用 pointer 事件自己做（HTML5 drag & drop 在 iPad 上不能用），move／up 掛在 window（卡片重新排列時把手會失去 pointer capture）。
 - 重要操作（刪除角色、匯入）前的密碼確認用 `lockService.verifyPin()`：不產生新 token、錯了一樣算次數、會被暫時鎖住。
 
 ### 4.13 密碼鎖（`lockService.js`、`lib/lockGuard.js`、`routes/lock.js`）
@@ -496,6 +508,33 @@ server/data/
 前端從 `GET /api/config` 拿（`web/src/limits.js`），各輸入框的 `maxlength` 綁它；還沒載入前沒有 maxlength，但後端一樣會擋。
 
 ---
+
+### 4.15 手機／平板連線（`lanService.js`、`lib/lanGuard.js`）
+
+- 平常只聽 `127.0.0.1:PORT`。設定裡打開後，**另外**在 `0.0.0.0:LAN_PORT`（預設 PORT＋1＝3001，`POKKATOMO_LAN_PORT`）開一個 **HTTPS** 伺服器，
+  用同一個程序裡另一份 Express app（`createApp({ lan: true })`），所以資料、密碼、登入 token 都共用；關掉就停掉那個伺服器。
+  開關記在 `app/settings.json` 的 `lanEnabled`，伺服器啟動時照著開（`startLanIfEnabled`）。
+- `lanGuard`（取代本機用的 `localOnly`）：來源 IP 要是區網（10／172.16–31／192.168／169.254／fe80／fc00、127），
+  Host 要是區網 IP 或 `<這台電腦>.local`（擋 DNS rebinding），功能關掉後進來的也擋。其他 API 一樣要密碼。
+- 開關只能在這台電腦上改（`req.fromLan` 的請求 403），打開前要先設定密碼。
+- 設定面板的 `LanPanel.vue` 顯示網址（`<電腦名稱>.local` 優先，IP 換了不用重掃）和 QR code（`qrcode-generator`）。
+- **HTTPS（`lib/lanTls.js`，node-forge）**：瀏覽器規定麥克風只能在安全連線用。第一次打開時在 `server/data/tls/` 產生「PokkaTomo Home CA」（10 年）
+  ＋伺服器憑證（397 天，SAN＝`<電腦>.local`、localhost、127.0.0.1、現在的區網 IP）。每 10 分鐘檢查：IP／名稱變了或剩不到 30 天就用同一張 CA 重簽、
+  `setSecureContext` 直接換上（手機不用重裝）。`tls/` 不匯出、不備份，匯入備份時也不搬走；`ca.key` 絕對不能從任何路由送出去。
+- **第一次設定頁（`lanSetupApp.js`，`LAN_SETUP_PORT`＝LAN_PORT＋1＝3002，HTTP）**：一樣過 `lanGuard`。`/` 是中／日步驟說明（看 Accept-Language，`?lang=`），
+  `/pokkatomo-ca.crt` 用 `application/x-x509-ca-cert`（Buffer，不加 charset，iOS 才會當描述檔），其他路徑 302 到 HTTPS。
+  頁面用 `fetch(https…, {mode:'no-cors'})` 檢查這台手機是否已經信任（沒信任時連線會直接失敗）。iOS 要用 Safari 才能安裝描述檔。
+- **手機的語音輸入（`speechService.js`、`native/speech.swift`、前端 `recorder.js`）**：
+  iPhone 上的 Chrome 是 WebKit，瀏覽器的語音辨識不穩定，所以手機只錄音：`recorder.js` 用 getUserMedia＋ScriptProcessor 收音，
+  自己降到 16kHz 單聲道 16-bit WAV（iPhone 的 MediaRecorder 是分段 MP4，Mac 不一定讀得了），放開後 `POST /api/speech`。
+  每次放開就關掉麥克風（開著的話 iOS 會把聲音輸出切成通話模式，角色講話變小聲）。
+  Mac 端：`prepareSpeech()`（手機連線打開時在背景）用 `xcrun swiftc` 把 `speech.swift` 編成 `native/build/PokkaTomoSpeech.app`
+  （Info.plist 有 `NSSpeechRecognitionUsageDescription`、`LSUIElement`，ad-hoc codesign；原始碼沒變就不重編，因為重編後 macOS 要重新允許），
+  再用 `open -W -n -g --stdout … -a PokkaTomoSpeech.app --args --authorize` 問權限。用 `.app＋open` 是為了讓「允許語音辨識」算在這個 App，
+  不是算在啟動它的終端機。辨識：`--args <wav> <zh-TW|ja-JP>`，stdout 一行 JSON；`requiresOnDeviceRecognition` 優先，這台 Mac 沒有那個語言的離線辨識時才改用 Apple 伺服器。
+  一次處理一個（asyncQueue）。狀態 `speech.state`：unsupported／idle／no_compiler／building／build_failed／ready；`speech.auth`：authorized／denied／notDetermined…
+  前端：`/api/config` 回 `lan`、`serverSpeech`；`useVoice` 的 `serverMode`（手機連線＋Mac 辨識可以用＋能錄音）走錄音，否則電腦上照舊用瀏覽器的 Web Speech。
+  手機上 Mac 辨識不能用時變成只能打字（`unsupportedNoteRemote`、招呼教打字）。測試用 `POKKATOMO_SPEECH_BIN` 指定假的辨識程式。
 
 ## 5. 前端
 
@@ -676,7 +715,7 @@ ASLEEP 整隻變淡紫＋頭低下＋尾巴捲起＋戴睡帽（蓋過季節的�
 - 同步後要比對雙方的 md5（曾經發生同步工具回報成功、檔案其實沒變的情況），並確認 `.command` 的執行權限還在
   （同步工具會把權限弄掉）。啟動檔會自動偵測更新並重建前端，不需要手動清 `server/public`。
 - 打包整份給新電腦：`npm run bundle`（排除 `node_modules`、聊天紀錄、日記、角色狀態、封存、備份、紀錄檔、暫存／壞檔備份、`tests/`；
-  現在整個 `server/data/` 都不打包，對方第一次打開會自己建立第一個角色、設密碼）。
+  現在整個 `server/data/` 都不打包，對方第一次打開會先設密碼、再自己新增第一個角色）。
 
 ---
 
@@ -722,12 +761,12 @@ npm run bundle      # 打包 zip
   是用少量範例調的，真的累積資料後要看紀錄檔的 `rag_recall` 再調。
 - **封存是 JSONL 不是 SQLite**：一年幾 MB、全部讀進記憶體沒問題；十年後如果太大再換（只要換 `archiveService.js`）。
 - **自動備份跟資料在同一台電腦**：電腦壞掉要靠「匯出所有資料」存到別處，新電腦用「匯入備份」還原。
-- **手機**：刻意只聽 127.0.0.1。要支援需要：對外開放（`HOST`）、密碼、HTTPS（手機瀏覽器在非 HTTPS 下拿不到麥克風）。
+- **手機連線要先裝憑證**：每台 iPhone／iPad 第一次要用 Safari 安裝並信任「PokkaTomo Home CA」；Mac 的資料被整個清掉（`tls/` 不見）時 CA 會換新，手機要重裝。
+  手機語音輸入需要 Mac 上有 Xcode 指令列工具（編譯 `speech.swift`），並在 Mac 上允許語音辨識。`speech.swift` 在開發用的 Linux 環境編不了，只能在 Mac 上驗證。
 - **全身角色**只有正面，沒有轉身、沒有骨架動畫；背（`back`）點不到。
 - **密碼是防君子**：資料檔沒加密；token 在伺服器記憶體，重開就要重新輸入。忘記密碼要開發者刪 `security.json`。
-- 沒有調整角色順序。刪除的角色只能由開發者從 `backups/deleted-characters/` 手動救回（畫面上沒有「復原」）。
+- 刪除角色是真的刪（連每日備份裡的也刪），無法復原。
 - 換季服裝、吃東西、跳舞只有全身角色有；舊版圓圓的角色沒有。
-- **登入時自動打開**用的是 AppleScript 加登入項目，只在開發環境的 Linux 上驗證過語法，沒有在真的 Mac 上跑過。
 - **鬧鐘／提醒**：網頁要開著才有用，還沒做。
 - **Safari**：語音辨識不穩；版面只在 Chromium 測過。
 - **農曆節日**資料到 2099 年（`lib/lunarData.js`）。試過改用 JS 內建的 Intl 農曆，但 ICU 在 2027、2030 年春節差一天，所以用產生的資料。

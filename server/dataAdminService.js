@@ -1,15 +1,13 @@
 // dataAdminService.js
 // 會「整批動到資料檔」的操作：刪除角色、匯入備份。兩個都要先在前端再輸入一次密碼（routes 裡 verifyPin）。
 //
-// 原則：使用者的資料「不直接刪」。
-//   - 刪除角色：整個角色資料夾搬到 server/data/backups/deleted-characters/<日期時間>/<編號>/，要救回來就搬回 characters/
-//     並加回 app/characters.json。
+//   - 刪除角色：**真的刪掉**（開發者決定：刪了就算了）。整個角色資料夾刪除，每日備份裡那個角色的資料也一起刪，無法復原。
 //   - 匯入備份：先把「現在的資料」整份搬到 server/data/backups/before-import-<日期時間>/，再放進 zip 裡的資料
 //     （2026-09 以前匯出的舊結構 zip 先用 lib/layoutV1.js 轉成新結構）。
-// 每日備份在 backups/daily/，自動清理只清那裡，不會刪到這些。
+// 每日備份在 backups/daily/，自動清理只清那裡，不會刪到 before-import-*。
 // 動完之後清掉記憶體快取（lib/cacheRegistry.js），不然 RAG 索引等還會用舊資料。
 
-import { mkdir, readdir, rename, stat, writeFile } from 'fs/promises';
+import { mkdir, readdir, rename, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 
 import { DATA_DIR, BACKUP_DIR } from './config.js';
@@ -37,29 +35,29 @@ async function exists(p) {
 }
 
 /**
- * 刪除角色：從清單拿掉，資料搬到 backups/deleted-characters/。
- * @returns {Promise<{ id: string, name: string, movedTo: string }>}
+ * 刪除角色：從清單拿掉，資料夾整個刪除（連每日備份裡的也刪），無法復原。
+ * @returns {Promise<{ id: string, name: string }>}
  */
 export async function deleteCharacter(id) {
   if (!isValidCharacterId(id)) throw new BadRequestError('角色不存在');
   assertDataHome();
-  let removed;
-  try {
-    removed = await removeCharacter(id);
-  } catch (err) {
-    if (err.code === 'last_character') throw new AppError('至少要留一個角色', { status: 400, code: 'last_character' });
-    throw err;
-  }
+  const removed = await removeCharacter(id);
   if (!removed) throw new AppError('角色不存在', { status: 404, code: 'not_found' });
 
-  const target = await uniqueDir(path.join(BACKUP_DIR, 'deleted-characters', stamp()));
-  await mkdir(target, { recursive: true });
-  // 整個角色資料夾（character.json、user.json、state.json、diary.json、conversations/）原封不動搬過去
-  const dir = path.join(CHARACTERS_DIR, id);
-  if (await exists(dir)) await rename(dir, path.join(target, id));
+  await rm(path.join(CHARACTERS_DIR, id), { recursive: true, force: true });
+  // 每日備份裡的這個角色也刪掉（不然之後新角色用到同一個編號時，舊備份會混在一起，也不算真的刪掉）
+  let dailies = [];
+  try {
+    dailies = await readdir(path.join(BACKUP_DIR, 'daily'));
+  } catch {
+    /* 還沒有每日備份 */
+  }
+  for (const day of dailies) {
+    await rm(path.join(BACKUP_DIR, 'daily', day, 'characters', id), { recursive: true, force: true });
+  }
   resetCaches(id);
-  log.info('character_deleted', { id, movedTo: path.relative(DATA_DIR, target) });
-  return { id, name: removed.name, movedTo: path.relative(DATA_DIR, target) };
+  log.info('character_deleted', { id });
+  return { id, name: removed.name };
 }
 
 // 同一秒做兩次（例如連按）時資料夾名稱不要撞到：後面加 -2、-3…
@@ -141,11 +139,11 @@ export async function importBackup(buffer) {
     }
   }
 
-  // 1. 現在的資料搬走（backups、logs、密碼留在原地）
+  // 1. 現在的資料搬走（backups、logs、密碼、手機連線的憑證 tls/ 留在原地）
   const target = await uniqueDir(path.join(BACKUP_DIR, `before-import-${stamp()}`));
   await mkdir(target, { recursive: true });
   for (const name of await readdir(DATA_DIR)) {
-    if (name === 'backups' || name === 'logs') continue;
+    if (name === 'backups' || name === 'logs' || name === 'tls') continue;
     if (name === 'app') {
       for (const f of await readdir(path.join(DATA_DIR, 'app'))) {
         if (f === 'security.json') continue;

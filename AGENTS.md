@@ -16,7 +16,7 @@ AI 用 macOS 內建的 **Apple Foundation Models**（指令列 `fm`），完全�
    任何需要打指令、開終端機、改 JSON 的解法都不行；錯誤要在畫面上用使用者看得懂的話說明。
 2. **不能弄壞使用者的資料**：`server/data/`（`app/` 密碼與角色清單、`characters/<編號>/` 每個角色的設定／對話／日記、`backups/`、`logs/`）是使用者的資料。開發、測試、同步都不可以覆蓋或刪除。結構見 README_TECH 4.10。
    測試一律用 `POKKATOMO_DATA_DIR` 指到暫存資料夾（`tests/helpers/env.js`）。
-3. **一律只聽 127.0.0.1**，不要改成 0.0.0.0（隱私；手機支援是另外的專案）。
+3. **主要伺服器一律只聽 127.0.0.1**，不要改成 0.0.0.0。手機／平板連線是使用者自己在設定裡打開時，`lanService.js` 另外開的 port（有 `lanGuard` 檢查），不要用其他方式對外開放。
 4. **介面雙語**：繁體中文＋日文，兩份字典結構要一致；提到角色名字寫 `{name}`，不要寫死「PokkaTomo」。
 5. **Apple Foundation Models 只有約 4096 tokens**：prompt 各段都有字數上限（`config.js` 的 `PROMPT_*`）。加東西進 prompt 前先想預算。
 6. **角色名字可以改**：人設、日記、歷史標籤都不能寫死名字（日記完全不提名字）。
@@ -52,6 +52,8 @@ npm run bundle      # 打包 zip 給新電腦
   不在請求裡的背景工作要用 `withCharacter(id, fn)` 包。設定面板的所有設定和語言也都跟著角色走（各角色資料夾的 `user.json`／`character.json`），不要做成全部角色共用。
   語言分兩個：`language`（角色說話的語言，建立後不能改，後端擋）與 `uiLanguage`（介面顯示，可切換）。語音、回覆相關的一律用說話的語言。
   **新增角色只給預設值**（`freshProfile`：稱呼主人、預設個性、其他空白），不要從別的角色複製任何設定。
+  **程式不自動建立角色**（開發者要求）：沒有角色時清單是空的，需要目前角色的 API 回 409 `no_character`，前端打開新增表單。
+  測試的 `setupTestEnv()` 會先放一個預設角色 001；要測「沒有角色」就刪掉資料夾，`env.resetData()` 是清空後放回 001。
 - **密碼**：新的 API 預設在 `requireUnlock` 後面（`routes/index.js`），只有真的不能擋的才放前面。
   前端的 fetch 會由 `web/src/api.js` 自動帶 token／角色；要下載檔案用 `downloadFrom()`，不要用 `<a href="/api/...">`。
 - **對話一律經過 `historyService.appendMessages()`**：寫進角色的 `conversations/YYYY-MM.jsonl`（唯一一份），
@@ -81,8 +83,7 @@ npm run bundle      # 打包 zip 給新電腦
 - 在時區不是本地的環境（例如 UTC 的 VM）跑會寫時間的腳本，要加 `TZ=<使用者的時區>`，不然時間會存成 +00:00。
 - 角色的回覆**不要**拿去當成使用者的事實（記憶擷取只看使用者的話）；也不要讓角色說自己是 AI（`identityRulesLine`）。
   **介面文字也不要出現「AI」**（`tests/web/outfits.test.js` 會檢查 i18n 兩份字典）。
-- **使用者的資料不直接刪**：刪除角色、匯入備份都先把資料搬到 `backups/deleted-characters/`、`backups/before-import-*/`（`dataAdminService.js`），
-  而且要再輸入一次密碼（`verifyPin`）。整批換掉資料檔之後要 `resetCaches()`（`lib/cacheRegistry.js`）；新加記憶體快取的模組要在那裡註冊清除函式。
+- **重要的資料操作要再輸入一次密碼**（`verifyPin`）：刪除角色是真的刪（連每日備份裡的也刪）；匯入備份前先把現在的資料搬到 `backups/before-import-*/`（`dataAdminService.js`）。整批換掉資料檔之後要 `resetCaches()`（`lib/cacheRegistry.js`）；新加記憶體快取的模組要在那裡註冊清除函式。
 - 登入時自動啟動用「登入項目＋.command」，**不要改成 LaunchAgent**：專案在「文件」資料夾，背景服務讀不到（macOS 隱私保護）。
 - 測試資料夾是 `tests/` 不是 `test/`（node 會把 `test/` 下每個 JS 當測試）。
 - `tests/helpers/env.js` 必須在 import `server/` 前呼叫（config 載入時就讀環境變數）。
@@ -111,8 +112,10 @@ npm run bundle      # 打包 zip 給新電腦
   日記月曆的「日記／對話」頁籤、每小時天氣、進畫面不顯示舊對話、永久對話封存（JSONL）、每日自動備份、匯出 zip、紀錄檔、輕量 RAG（BM25）、全身 SVG 角色（可切回舊版）、
   啟動檔優先開 Chrome、字數上限單一來源、農曆資料到 2099、說話語言／介面語言分開、刪除角色、匯入備份、登入時自動打開、
   「記得的事」彈窗（搜尋＋改／刪記憶）、吃東西／跳舞／睡帽／換季服裝。
-- 可能的下一步：排序角色；RAG 加中日文雙語關鍵字或 embedding；提醒／鬧鐘；手機連線。
+- 可能的下一步：提醒／鬧鐘（先不做）。同一個角色只用一種語言，不需要中日文互找。
 - 忘記密碼：刪 `server/data/app/security.json`。
 - **Git 不上傳**：`server/data/`（使用者資料）、`*.local.md`（私人背景）、`.env`、`Claude outputs/`，見 `.gitignore`。
-- 手機先不做；RWD 已完成。
+- 手機／平板：家裡 Wi‑Fi、HTTPS（自己發的憑證，每台手機裝一次）、按住說話＝手機錄音→Mac 辨識（`speechService.js`＋`native/speech.swift`）。
+  `speech.swift` 在 Linux 開發環境沒辦法編譯或執行，改它之後一定要在 Mac 上實測；改了會重新編譯、Mac 要重新允許語音辨識。
+- 授權：AGPL-3.0-or-later，原作者 timshih0523-work（`LICENSE`、README「授權」、設定面板最下面的原始碼連結；AGPL 要求網路服務也要提供原始碼，不要拿掉）。
 - 其他限制見 README_TECH 第 9 節。

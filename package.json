@@ -1,0 +1,26 @@
+{
+  "name": "pokkatomo-apple",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "網頁版 AI 隨身夥伴（PokkaTomo 概念原型），使用 macOS 內建 Apple Foundation Models 作為 LLM 核心",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server/server.js",
+    "bundle": "node scripts/bundle.js",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "vite": "^5.4.11",
+    "vue": "^3.5.13"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

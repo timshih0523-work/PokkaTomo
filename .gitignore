@@ -1,0 +1,30 @@
+# ---- 絕對不能上傳 ----
+# 使用者資料：角色、對話、日記、密碼雜湊、備份、紀錄檔（見 README_TECH 4.10）
+server/data/
+# 私人背景與私人紀錄（給 AI 協作者看的，只留在開發者電腦上；見 AGENTS.md 開頭）
+*.local.md
+# 環境變數（可能有金鑰）；範例檔可以上傳
+.env
+.env.*
+!.env.example
+# AI 工具產生的暫存輸出（舊版文件副本、更新包）
+Claude outputs/
+
+# ---- 產生出來的東西 ----
+node_modules/
+server/public/
+dist/
+*.zip
+*.log
+npm-debug.log*
+logs/
+__pycache__/
+*.pyc
+.venv/
+*.db
+*.db-wal
+*.db-shm
+compare_*.md
+
+# ---- 系統檔 ----
+.DS_Store
